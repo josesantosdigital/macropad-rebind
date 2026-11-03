@@ -704,6 +704,21 @@ ok("the full text is still the tooltip", rows[0].title.includes("Ctrl+Z") && /tu
 rows[4].onclick();                               // knob 2 press
 eq("clicking a row selects that action", app.$("editorTitle").textContent, "Knob 2 press");
 
+console.log("\nmouse numeric fields refresh their labels and packet preview");
+kp.layers[0].bindings[0x10] = { type:"mouse", action:"wheel", wheel:1, mod:0 };
+app.select(0x10, "Knob 1 turn left");
+const descendants = root => [root, ...(root.children || []).flatMap(descendants)];
+const wheelInput = descendants(app.$("editor")).find(node => node.type === "number" && node.min === "-127");
+const wheelPreview = app.$("editor").children.find(node => node.innerHTML.includes("Sends <code>"));
+ok("wheel editor has its numeric input and packet preview", !!wheelInput && !!wheelPreview);
+wheelInput.value = "-3";
+wheelInput.oninput();
+eq("changing the wheel value updates the selected binding", kp.layers[0].bindings[0x10].wheel, -3);
+ok("wheel input stays mounted while typing", descendants(app.$("editor")).includes(wheelInput));
+ok("knob label updates without reselection", descendants(app.$("knobs")).some(node => /knob-act/.test(node.className || "") && node.textContent.includes("Wheel -3")));
+const wheelPacket = Array.from(app.bindingReports(0x10, kp.layers[0].bindings[0x10])[0].subarray(0, 16), v => v.toString(16).padStart(2, "0")).join(" ");
+ok("packet preview updates without reselection", wheelPreview.innerHTML.includes(wheelPacket));
+
 console.log("\nXZKJ read, optional backup, import, write, and restore");
 const xzkjFirst = makeDevice({ vid: 0x514c, pid: 0x8850, keys: 16, knobs: 3,
                                productName: "XZKJ-16key_3knob" });

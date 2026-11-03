@@ -2993,22 +2993,34 @@ function renderEditor() {
     return;
   }
 
+  const preview = document.createElement("p");
+  preview.className = "hint";
   if (type === "key")   renderKeyEditor(host, b);
   if (type === "media") renderMediaEditor(host, b);
-  if (type === "mouse") renderMouseEditor(host, b);
+  if (type === "mouse") renderMouseEditor(host, b, () => {
+    // Keep the numeric input mounted and focused while its binding label and
+    // packet preview update immediately.
+    renderGrid();
+    renderKnobs();
+    updateBindingPreview(preview, sel.slot, b);
+  });
+  updateBindingPreview(preview, sel.slot, b);
+  host.append(preview);
+}
 
+function updateBindingPreview(preview, slot, binding) {
   // The encoders throw when a binding cannot be expressed in the current
   // format — too many steps, or a delay the device has no record for. That
   // must not take the editor with it: unhandled, the exception escapes
   // renderEditor -> renderAll and even connect(), which then reports a
   // perfectly healthy keypad as "Connect failed: too long for this device".
   // Showing the reason where the user can see it is the whole point.
+  preview.textContent = "";
   let first = null, encErr = null;
-  try { first = bindingReports(sel.slot, b)[0]; }
+  try { first = bindingReports(slot, binding)[0]; }
   catch (e) { encErr = e.message; }
+  preview.hidden = !encErr && !first;
   if (encErr || first) {
-    const preview = document.createElement("p");
-    preview.className = "hint";
     if (encErr) {
       const lead = document.createElement("b");
       lead.textContent = "This will not fit your keypad: ";
@@ -3017,7 +3029,6 @@ function renderEditor() {
     } else {
       preview.innerHTML = `Sends <code>03 ${hex(first.subarray(0, 16))}</code>`;
     }
-    host.append(preview);
   }
 }
 
@@ -3208,7 +3219,7 @@ function renderMediaEditor(host, b) {
   host.append(hint);
 }
 
-function renderMouseEditor(host, b) {
+function renderMouseEditor(host, b, onValueChange) {
   const af = document.createElement("div");
   af.className = "field";
   af.innerHTML = `<span class="legend">Mouse action</span>`;
@@ -3244,20 +3255,20 @@ function renderMouseEditor(host, b) {
   }
 
   if (b.action === "wheel") {
-    host.append(numberField("Wheel delta (−127…127)", b.wheel, v => { touch(b); b.wheel = v; }, -127, 127));
+    host.append(numberField("Wheel delta (−127…127)", b.wheel, v => { touch(b); b.wheel = v; }, -127, 127, onValueChange));
   }
   if (b.action === "move" || b.action === "drag") {
     const row = document.createElement("div");
     row.className = "row";
     row.append(
-      numberField("dx", b.dx, v => { touch(b); b.dx = v; }, -127, 127),
-      numberField("dy", b.dy, v => { touch(b); b.dy = v; }, -127, 127),
+      numberField("dx", b.dx, v => { touch(b); b.dx = v; }, -127, 127, onValueChange),
+      numberField("dy", b.dy, v => { touch(b); b.dy = v; }, -127, 127, onValueChange),
     );
     host.append(row);
   }
 }
 
-function numberField(label, value, set, min, max) {
+function numberField(label, value, set, min, max, onValueChange) {
   const f = document.createElement("div");
   f.className = "field";
   const l = document.createElement("label");
@@ -3268,6 +3279,7 @@ function numberField(label, value, set, min, max) {
   i.oninput = () => {
     set(Math.max(min, Math.min(max, Number(i.value) || 0)));
     saveProfile();
+    onValueChange();
   };
   f.append(l, i);
   return f;

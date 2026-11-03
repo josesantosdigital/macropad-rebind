@@ -1,9 +1,36 @@
-# Macropad Rebind
+# Macropad Rebind — XZKJ 16-key fork
 
-**Configure your cheap AliExpress macropad on Linux, macOS, Windows, ChromeOS
-or Android — from a browser tab. Nothing to install, no drivers.**
+This fork of [Macropad Rebind by jvspier](https://github.com/jvspier/macropad-rebind)
+adds support for a wireless XZKJ macropad with **16 keys, 3 rotary encoders,
+and 3 programmable layers**. It was created to read and back up the pad's
+existing mappings before changing them, and to make this particular layout
+usable from the browser without depending on its Windows configurator.
 
-### ▶ [Open it now — jvspier.github.io/macropad-rebind](https://jvspier.github.io/macropad-rebind/)
+| Device detail | Value |
+|---|---|
+| PCB family / marking | XZKJ / `@XZKJ-16key_3knob` |
+| USB VID:PID | `514C:8850` |
+| Configuration interface | HID usage page `0xFF00`, report ID 3, 64-byte input and output payloads |
+| Protocol | `ch57x-3` (Alternative B) |
+| Original software | `MINI_KEYBOARD` |
+| Connectivity | USB for configuration; Bluetooth / 2.4 GHz for wireless use |
+| MCU | Not confirmed |
+
+The fork captures all 25 key and encoder binding records for each of the three
+layers and exports the raw replies in a JSON backup. It also adds the physical
+4×4 layout, standalone modifier support, media and mouse readback, and an
+experimental per-key RGB editor with the device's six lighting modes. The
+original reply bytes are retained for records the editor cannot fully represent.
+
+On one unit, the binding read path, a single-key write and restore, and one RGB
+color change were verified. Other write cases and devices remain experimental.
+**The device's current lighting settings cannot reliably be read or backed up:**
+the RGB panel shows a local draft, and applying it sends lighting settings for
+all three layers. Export a binding backup before making changes.
+
+Run this fork locally with `node tools/serve-local.mjs`, then open the displayed
+localhost URL in a Chromium-based browser. The [original hosted app](https://jvspier.github.io/macropad-rebind/)
+is maintained by upstream and does not include this fork's changes.
 
 <p align="center">
   <img src="images/screenshot.png"
@@ -11,20 +38,10 @@ or Android — from a browser tab. Nothing to install, no drivers.**
        width="720">
 </p>
 
-Those little USB keypads with knobs — sold on AliExpress, Temu, Amazon and eBay
-under a hundred different brand names — almost all use the same WCH CH57x chip,
-and almost all ship with the same 32-bit Windows-only configuration tool. No
-Linux build, no macOS build, and nothing at all if you are on a Chromebook.
-
-Macropad Rebind replaces it. It is a single HTML file that talks to the keypad
-over WebHID, so the same page configures your device from Linux, macOS, Windows,
-ChromeOS or Android — no installer, no driver, no vendor software. It needs a
-Chromium-based browser (Chrome, Edge, Brave, Opera, Vivaldi); Firefox and Safari
-have not implemented WebHID.
-
-It also **reads the configuration already on your keypad**, which the original
-software's ecosystem could not do — so you can see what your keys are set to
-before you change anything.
+The upstream app supports several other small macropads sold under many names.
+Its single HTML page uses WebHID in a compatible Chromium-based browser. The
+XZKJ read protocol in this fork was identified by observing the manufacturer's
+software, which can also read bindings from the tested device.
 
 ---
 
@@ -122,8 +139,8 @@ reported lighting freezes. For protocol details, see the [research](https://gith
 
 ### Run the modified copy locally
 
-The public GitHub Pages site does not include changes in an unpushed clone. From
-the repository directory, run:
+The upstream GitHub Pages site does not include this fork's changes. From the
+repository directory, run:
 
 ```powershell
 node tools/serve-local.mjs
