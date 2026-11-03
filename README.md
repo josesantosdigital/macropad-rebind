@@ -61,29 +61,84 @@ whose configuration sits on an unexpected interface would otherwise never
 appear at all. Pick your keypad; the log prints its id and HID usage pages, so
 a report is enough to get it added.
 
-> **Not every model takes the same commands.** Three command formats exist and
-> the right one is chosen automatically from your keypad's USB id, and corrected
-> if the keypad answers the identify command like a Standard one. You should
-> never have to think about this — but if your keys do not respond after writing,
-> a dropdown appears next to the model picker that sends a different format.
+> **Not every model takes the same commands.** The tool selects a format from
+> your keypad's USB id and, for the reused `514c:8850` id, checks the read-only
+> identify response. The detected XZKJ 16-key/3-knob variant is locked to its
+> captured format so a mistaken override cannot send a different protocol.
 >
 > | Your keypad | What to expect |
 > |---|---|
 > | `1189:8840`, `1189:8842`, `1189:8850`, `1189:8851`, `514c:8851` | Everything works. This is the format the tool was built and tested against. |
 > | `1189:8890` | Writing works in principle, but is untested and sources disagree about this model — try both formats. No backlight control, and the tool cannot read the keypad back. |
 > | `514c:8850`, 12 keys and 4 knobs | Everything works: reading, writing and backlight, confirmed on hardware. The id is listed under another format, but this keypad answers the identify command like a Standard one, so the tool switches to Standard when it connects. |
-> | `514c:8850`, anything else | Writing works in principle, but is untested. No backlight control, and no read-back. Only applies to a keypad that does not answer the identify command. |
+> | `514c:8850`, 16 keys and 3 knobs (`@XZKJ-16key_3knob`) | Reading all 3 layers, a one-key write-and-restore, and one RGB color change are confirmed on one unit. Other writes and lighting modes remain experimental. |
+> | `514c:8850`, anything else | Writing works in principle, but is untested. No backlight control or confirmed read-back. |
 >
-> "Untested" means the code was written from other people's research and has
-> never been tried on real hardware. It will tell you so when you connect.
+> For the 16-key/3-knob unit, the read path is captured from the vendor app. The
+> separate open-source writer has been reported working on this same PCB family.
+> This app's writer completed a one-key A-to-B change, readback, and B-to-A
+> restore on the user's unit. The restored mapping reads as A; one response
+> header byte differs from its original raw value and remains unexplained. Once
+> identified, the device can be written without a manual backup export. The app
+> reads its current bindings automatically before each write and offers an
+> optional **Export pre-write backup** button.
 > The gory details are in [docs/PROTOCOL.md](docs/PROTOCOL.md#not-one-protocol--three-dialects).
+
+To use a previously exported profile, connect and import it, then review the
+device diff before clicking **Write**. A read-only snapshot of the device just
+before that write can be exported independently; it stays in memory only until
+the page closes or another pre-write snapshot replaces it.
+
+On the XZKJ 16-key/3-knob unit, the **Clear** button marks a key or knob action
+to become unbound. Review the clear in the write confirmation; a slot simply
+missing from an imported profile is still
+left alone. This uses a count-zero record verified for one slot on this unit;
+other slots and layers use the same inferred format and are checked by readback.
+
+On the XZKJ 16-key/3-knob unit, a vendor-configured standalone Shift now reads
+as a Shift-only key step. To set one in the editor, choose the key, select the
+keyboard action, enable **Shift**, choose **modifiers only**, and add the step.
+The one-entry format matches a working vendor-configured readback; writes of
+this form by this app have not yet been verified on hardware. The full raw
+device reply is retained in a current-device backup.
+
+Recognized XZKJ media keys and mouse actions are decoded on readback so they
+appear as their actual bindings in the editor and write preview. The original
+raw reply is retained; records the editor cannot represent remain opaque.
+
+The XZKJ **RGB draft** editor keeps its draft separately from key bindings.
+Choose a starting colour and **Fill all layers**, then use the layer tabs and
+16 colour selectors to edit each layer. Choose from off, static, reactive,
+ripple, column wave and row wave modes. The draft can be exported/imported as
+its own JSON file. To apply it, connect and use the separate RGB button and
+confirmation. Applying sends settings for all three lighting layers because
+existing lighting cannot be read back. The app reads all 75 raw binding reports
+before sending the three RGB reports consecutively and compares them afterward;
+it cannot detect a binding change between those reports and does not restore
+anything automatically. The pre-write snapshot is available for optional export
+while the page remains open. A mode-2 color change was verified on one unit;
+other colors, modes and firmware versions remain experimental. Other owners
+reported lighting freezes. For protocol details, see the [research](https://github.com/kriomant/ch57x-keyboard-tool/pull/175).
+
+### Run the modified copy locally
+
+The public GitHub Pages site does not include changes in an unpushed clone. From
+the repository directory, run:
+
+```powershell
+node tools/serve-local.mjs
+```
+
+Open the printed `http://localhost:8000/` address in Chrome or Edge. The small
+static server binds only to this computer and has no HID access; device access
+is provided by the browser page after you choose **Connect**.
 
 These are sold as: *3 key macro pad*, *6 key macropad with knob*, *9 key RGB
 keypad*, *12 key macro keyboard with 2 knobs*, *15 key shortcut pad*, *mini
 gaming keypad*, *one-handed keyboard*, *Photoshop shortcut pad*, *streaming
 keypad*, *volume knob keypad*.
 
-**All 22 layouts are supported**, from 2 keys up to 15 keys and 3 knobs — see
+**All 24 layouts are supported**, from 1 key up to 16 keys and 4 knobs — see
 [Verified models](#verified-models) below. The layout is read from the keypad
 itself; if the on-screen grid doesn't match your hardware, pick the right model
 from the dropdown.
@@ -129,9 +184,9 @@ marked confirmed, or corrected.
 | 16 | 0 | 4×4 | — |
 | 16 | 1 | 4×4 | — |
 | 16 | 2 | 4×4 | — |
-| 16 | 3 | 4×4 | — |
+| 16 | 3 | 4×4 | yes — XZKJ `@XZKJ-16key_3knob`; column-major, bottom-to-top slot order |
 
-1 of 22 confirmed so far. A wrong grid is a one-line fix, and the
+2 of 24 confirmed so far. A wrong grid is a one-line fix, and the
 tests catch it immediately.
 
 ---
@@ -143,7 +198,12 @@ tests catch it immediately.
 It must be served over `http://localhost` or `https://` — browsers only
 allow USB access from a secure origin.
 
-**The quickest route is [the hosted copy](https://jvspier.github.io/macropad-rebind/)** —
+For `514c:8850` with 16 keys and 3 knobs, use this modified local working tree:
+the hosted link above points to the public upstream page and does not yet
+contain these device-specific changes. Run the local server command below from
+this repository, then open its localhost URL in a Chromium browser.
+
+For other supported models, **the quickest route is [the hosted copy](https://jvspier.github.io/macropad-rebind/)** —
 it is served over HTTPS, which is all the browser needs. Nothing is uploaded
 anywhere; the page talks straight to the USB device.
 
@@ -269,11 +329,12 @@ right.
 orange, yellow, green, cyan, blue, purple or white, set per layer. Any colour
 works with any mode.
 
-Colour is global. The firmware does drive keys individually — that is how the wave
-and press effects work — but [nothing in the protocol lets the host choose
-which](docs/PROTOCOL.md#per-key-colour-not-found). Seven mechanisms were tried and
-ruled out, and the doc explains why a pad can still briefly show two colours at
-once.
+For the Standard (`ch57x-1`) models, colour is global. The firmware does drive
+keys individually for wave and press effects, but the host cannot choose each
+key's colour using that protocol. For the XZKJ 16-key/3-knob `ch57x-3` unit,
+[separate research](https://github.com/kriomant/ch57x-keyboard-tool/pull/175)
+reports per-key RGB. The experimental XZKJ RGB editor is separate from the
+binding writer, and the known binding backup does not include lighting.
 
 ---
 
@@ -370,8 +431,8 @@ python3 linux/probe.py
 ## Tests
 
 ```bash
-node test-protocol.mjs     # 283 assertions — building and decoding messages
-node test-app.mjs          #  23 assertions — the device layer, end to end
+node test-protocol.mjs     # protocol encoding, decoding, layouts, and documentation
+node test-app.mjs          # mocked device flows, including XZKJ read, backup, write, and restore
 ```
 
 No dependencies. Both extract from `index.html` itself, so they always check the
@@ -396,8 +457,7 @@ already been enabled on the lines above the throw.
 
 [docs/PROTOCOL.md](docs/PROTOCOL.md) documents the full wire format: the two HID
 interfaces, the 64-byte record layout, key and knob slot numbering, the physical
-grid mapping, the lighting byte, and one undocumented command that will make a
-working keypad look broken if you send it blind.
+grid mapping, the lighting byte, and the XZKJ-specific read capture and its limits.
 
 ## Credits
 

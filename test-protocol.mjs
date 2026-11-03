@@ -14,7 +14,8 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(join(here, "index.html"), "utf8");
-const js = /<script>([\s\S]*)<\/script>/.exec(html)[1];
+// Normalize Windows checkouts before slicing on a multi-line marker.
+const js = /<script>([\s\S]*)<\/script>/.exec(html)[1].replace(/\r\n/g, "\n");
 const core = js.slice(
   js.indexOf("const REPORT_ID"),
   js.indexOf("/* ==================================================================\n   Device I/O"),
@@ -22,12 +23,12 @@ const core = js.slice(
 
 const mod = await import(
   "data:text/javascript;base64," +
-  Buffer.from(core + "\nexport {bindingReports, ledReports, keySlot, knobSlot, decodeRecord, touch, emptyReports, variantReport, DEVICE_VARIANTS, textToSteps, diffProfiles, blankProfile, LAYOUTS, findLayout, gridOrder, posOfSlot, DEFAULT_LAYOUT, VENDOR_IDS, MODELS, modelFor, IMPLEMENTED_DIALECT, ch3Reports, DIALECT_CAPS, displayGrid, knobOrder, ORIENTATIONS, MEDIA, ch2Reports, DIALECT_LABEL, dialectName, MODIFIER_NAMES, MODIFIERS, modName, lcReports, reportBytes, configCollection, framingFor, frame, unframe, pickInterface, DEFAULT_FRAMING, REPORT_ID, REPORT_LEN};\n").toString("base64")
+  Buffer.from(core + "\nexport {bindingReports, ledReports, keySlot, knobSlot, decodeRecord, decodeCh3Record, touch, emptyReports, variantReport, DEVICE_VARIANTS, textToSteps, diffProfiles, blankProfile, LAYOUTS, findLayout, gridOrder, posOfSlot, DEFAULT_LAYOUT, VENDOR_IDS, MODELS, modelFor, IMPLEMENTED_DIALECT, ch3Reports, xzkjRgbReport, DIALECT_CAPS, displayGrid, knobOrder, ORIENTATIONS, MEDIA, ch2Reports, DIALECT_LABEL, dialectName, MODIFIER_NAMES, MODIFIERS, modName, lcReports, reportBytes, configCollection, framingFor, frame, unframe, pickInterface, DEFAULT_FRAMING, REPORT_ID, REPORT_LEN};\n").toString("base64")
 );
-const { bindingReports, ledReports, keySlot, knobSlot, decodeRecord, touch,
+const { bindingReports, ledReports, keySlot, knobSlot, decodeRecord, decodeCh3Record, touch,
         emptyReports, variantReport, DEVICE_VARIANTS, textToSteps, diffProfiles,
         blankProfile, LAYOUTS, findLayout, gridOrder, posOfSlot, DEFAULT_LAYOUT,
-        VENDOR_IDS, MODELS, modelFor, IMPLEMENTED_DIALECT, ch3Reports,
+        VENDOR_IDS, MODELS, modelFor, IMPLEMENTED_DIALECT, ch3Reports, xzkjRgbReport,
         DIALECT_CAPS, displayGrid, knobOrder, ORIENTATIONS, MEDIA, ch2Reports, DIALECT_LABEL, dialectName, MODIFIER_NAMES, MODIFIERS, modName, lcReports,
         reportBytes, configCollection, framingFor, frame, unframe, pickInterface, DEFAULT_FRAMING, REPORT_ID, REPORT_LEN } = mod;
 
@@ -294,6 +295,13 @@ rows = diffProfiles(dev, ed, findLayout(12, 2));
 eq("removed binding -> del", rows[0].kind, "del");
 eq("  to is null", rows[0].to, null);
 
+ed.layers[0].bindings[2] = { type: "clear" };
+rows = diffProfiles(dev, ed, findLayout(12, 2));
+eq("an explicit clear is distinct from a missing slot", rows[0].kind, "clear");
+eq("an explicit clear targets unbound", rows[0].to, null);
+delete dev.layers[0].bindings[2];
+eq("an explicit clear matches an already unbound slot", diffProfiles(dev, ed, findLayout(12, 2)).length, 0);
+
 // knobs must be named as knobs, not as keys
 dev = mk(); ed = mk();
 ed.layers[1].bindings[20] = { type: "media", media: 0xe2 };
@@ -443,7 +451,7 @@ console.log("\nthe Linux udev rule covers every model");
   // user sees a keypad that connects to nothing. 1189:8890 was missing, which
   // is exactly how issue #3 was reported.
   const { readFileSync } = await import("node:fs");
-  const rules = readFileSync(join(here, "linux/60-ch57x-keypad.rules"), "utf8");
+  const rules = readFileSync(join(here, "linux/60-ch57x-keypad.rules"), "utf8").replace(/\r\n/g, "\n");
   const vendors  = /idVendor\}=="([^"]+)"/.exec(rules)[1].toLowerCase().split("|");
   const products = /idProduct\}=="([^"]+)"/.exec(rules)[1].toLowerCase().split("|");
   const hex4 = n => n.toString(16).padStart(4, "0");
@@ -456,7 +464,7 @@ console.log("\nthe Linux udev rule covers every model");
   eq("  the comment matches the rule", listed.join(" "), products.join(" "));
   // As must the README, which is where a user actually looks to see whether
   // their keypad is covered. It drifted once already.
-  const readme = readFileSync(join(here, "README.md"), "utf8");
+  const readme = readFileSync(join(here, "README.md"), "utf8").replace(/\r\n/g, "\n");
   const doc = /Supported product ids:([\s\S]*?), under vendor/.exec(readme)[1];
   const documented = [...doc.matchAll(/`([0-9a-f]{4})`/g)].map(m => m[1]);
   eq("  the README lists them too", documented.join(" "), products.join(" "));
@@ -467,7 +475,7 @@ console.log("\nREADME stays in step with the code");
   // The model table in the README is generated from LAYOUTS. If someone adds a
   // model and forgets the docs, this fails rather than shipping a stale table.
   const { readFileSync } = await import("node:fs");
-  const readme = readFileSync(join(here, "README.md"), "utf8");
+  const readme = readFileSync(join(here, "README.md"), "utf8").replace(/\r\n/g, "\n");
   const body = /\| Keys \| Knobs \| Grid \| Confirmed on hardware \|\n\|[^\n]*\|\n([\s\S]*?)\n\n/.exec(readme);
   eq("model table present in README", !!body, true);
   const documented = body[1].trim().split("\n").map(line => {
@@ -613,18 +621,82 @@ console.log("\nprotocol dialects");
 }
 
 
-console.log("\nch57x-3 encoder (514c:8850) — ported, NOT hardware-verified");
+console.log("\nch57x-3 encoder (514c:8850) — source-vector checked, device writer unverified");
 {
+  const rgb = Array.from({length:16}, (_, i) => `#${i.toString(16).padStart(2,"0")}2233`);
+  const rgbReport = xzkjRgbReport(2, rgb, 2);
+  const rgbVector = [0x03,0xfe,0xb0,2,2,
+    ...rgb.flatMap((_, i) => [i,0x22,0x33])];
+  check("XZKJ RGB contains sixteen colours without a duplicate first slot", rgbReport, rgbVector);
+  // Exact first 53 transfer bytes captured from MINI_KEYBOARD's mode-2 save;
+  // all remaining bytes were zero. The owner observed the first key turn red.
+  const captured = Buffer.from("03feb00002ff000000008bc8c896c8c8968b000000008b00008bc8c8968b000000008b008000c8c896c8c896c8c896008000c8c896", "hex");
+  const capturedColors = ["#ff0000","#00008b","#c8c896","#c8c896","#8b0000","#00008b","#00008b","#c8c896","#8b0000","#00008b","#008000","#c8c896","#c8c896","#c8c896","#008000","#c8c896"];
+  check("XZKJ mode 2 reproduces the captured vendor report", xzkjRgbReport(0, capturedColors, 2), [...captured]);
+  let invalidRgb = false;
+  try { xzkjRgbReport(3, rgb); } catch { invalidRgb = true; }
+  eq("RGB rejects an invalid layer", invalidRgb, true);
+  invalidRgb = false;
+  try { xzkjRgbReport(0, rgb.slice(0,15)); } catch { invalidRgb = true; }
+  eq("RGB rejects incomplete colours", invalidRgb, true);
+  invalidRgb = false;
+  try { xzkjRgbReport(0, rgb, 6); } catch { invalidRgb = true; }
+  eq("RGB rejects unknown modes", invalidRgb, true);
   // Asserted against ch57x-keyboard-tool's k8850_4x4.rs, read line by line.
   // Ctrl+A: the modifier is its OWN 3-byte entry, then the keycode entry.
   let r = ch3Reports(1, { type: "key", steps: [{ mods: 0x01, code: 0x04 }], delay: 0 }, 0);
   check("ctrl-a on key 1", r[0], [0x03,0xfd,0x01,0x01,0x01, 0x00,0x02, 0,0,0xf1, 0,0,0x04]);
-  check("  terminator",    r[1], [0x03,0xfd,0xfe,0xff]);
-  eq("  two reports, no 0xAA separators", r.length, 2);
+  eq("  one binding report; writeAll owns the batch terminator", r.length, 1);
 
   // Plain key: one entry.
   r = ch3Reports(2, { type: "key", steps: [{ mods: 0, code: 0x04 }], delay: 0 }, 0);
   check("plain 'a'", r[0], [0x03,0xfd,0x02,0x01,0x01, 0x00,0x01, 0,0,0x04]);
+
+  // The vendor-configured working Shift record has one F2 entry, not F2 plus
+  // a zero-key entry. Its post-count bytes are retained as opaque raw data.
+  const vendorShift = R("fa 05 01 01 00 01 00 00 f2 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 00 00 00");
+  const shiftBinding = decodeCh3Record(vendorShift);
+  eq("vendor Shift-only decodes as a key", shiftBinding.type, "key");
+  eq("vendor Shift-only is a standalone Shift step", JSON.stringify(shiftBinding.steps), JSON.stringify([{mods:2, code:0}]));
+  eq("vendor Shift-only preserves every raw byte", hx(shiftBinding._raw), hx(vendorShift));
+  r = ch3Reports(5, { type: "key", steps: [{ mods: 0x02, code: 0 }], delay: 0 }, 0);
+  check("standalone Shift sends only one F2 entry", r[0], [0x03,0xfd,0x05,0x01,0x01, 0x00,0x01, 0,0,0xf2]);
+  const delayedModifier = R("fa 05 01 01 00 01 00 01 f2");
+  eq("a delayed modifier stays opaque", decodeCh3Record(delayedModifier).type, "raw");
+
+  // Captured 0xFA replies from a 16x3 unit. Media usages occupy bytes 8 and
+  // 11; the reader's flag at byte 4 differs from the corresponding writer.
+  for (const [label, report, usage] of [
+    ["play / pause", "fa 15 01 02 01 02 00 00 cd 00 00 00", 0xcd],
+    ["volume down",  "fa 17 01 02 01 02 00 00 ea 00 00 00", 0xea],
+    ["mute",         "fa 18 01 02 01 02 00 00 e2 00 00 00", 0xe2],
+    ["volume up",    "fa 19 01 02 01 02 00 00 e9 00 00 00", 0xe9],
+  ]) {
+    const raw = R(report), decoded = decodeCh3Record(raw);
+    eq(`captured ${label} decodes as media`, decoded.type, "media");
+    eq(`captured ${label} retains its usage`, decoded.media, usage);
+    eq(`captured ${label} preserves all raw bytes`, hx(decoded._raw), hx(raw));
+  }
+  const highMedia = decodeCh3Record(R("fa 01 01 02 01 02 00 00 92 00 00 01"));
+  eq("two-byte consumer usage decodes correctly", highMedia.media, 0x192);
+  eq("unknown media usage remains raw", decodeCh3Record(R("fa 01 01 02 01 02 00 00 ff 00 00 ff")).type, "raw");
+  eq("media reply with unrecognized fields remains raw", decodeCh3Record(R("fa 01 01 02 01 02 00 00 e9 01 00 00")).type, "raw");
+  const capturedClick = R("fa 12 01 03 01 04 00 00 00 00 00 01");
+  const mouse = decodeCh3Record(capturedClick);
+  eq("captured mouse click decodes as mouse", mouse.type, "mouse");
+  eq("captured mouse click retains its action and button", `${mouse.action}:${mouse.buttons}:${mouse.mod}`, "click:1:0");
+  eq("captured mouse click preserves raw bytes", hx(mouse._raw), hx(capturedClick));
+  const combinedMouse = R("fa 12 01 03 01 04 00 00 00 00 00 01 00 00 01");
+  eq("unrepresentable click-and-move stays raw", decodeCh3Record(combinedMouse).type, "raw");
+  eq("unknown mouse modifier stays raw", decodeCh3Record(R("fa 12 01 03 01 04 00 00 f4 00 00 01")).type, "raw");
+  const from = blankProfile(), to = blankProfile();
+  from.layers[0].bindings[18] = mouse;
+  to.layers[0].bindings[18] = { type:"mouse", action:"click", buttons:1, mod:0, wheel:1, dx:0, dy:0 };
+  from.layers[0].bindings[21] = decodeCh3Record(R("fa 15 01 02 01 02 00 00 cd 00 00 00"));
+  to.layers[0].bindings[21] = { type:"media", media:0xcd };
+  eq("matching readback has no false media or click diff", diffProfiles(from, to, findLayout(16, 3)).length, 0);
+  to.layers[0].bindings[21].media = 0xb7;
+  eq("a genuine media change still appears in the diff", diffProfiles(from, to, findLayout(16, 3)).length, 1);
 
   // Every modifier maps to its own 0xF1..0xF8 code.
   r = ch3Reports(1, { type: "key", steps: [{ mods: 0xff, code: 0x04 }], delay: 0 }, 0);
@@ -668,7 +740,8 @@ console.log("\nch57x-3 encoder (514c:8850) — ported, NOT hardware-verified");
 
   // Capability flags must reflect what the dialect can actually do.
   eq("ch57x-3 has no LED command",  DIALECT_CAPS["ch57x-3"].led, false);
-  eq("ch57x-3 has no read command", DIALECT_CAPS["ch57x-3"].read, false);
+  eq("ch57x-3 read capability is scoped to XZKJ 16x3", DIALECT_CAPS["ch57x-3"].read, true);
+  eq("ch57x-3 read layout", DIALECT_CAPS["ch57x-3"].readLayouts.map(x => x.join("/")).join(","), "16/3");
   eq("ch57x-3 is untested",         DIALECT_CAPS["ch57x-3"].tested, false);
   eq("ch57x-1 is tested",           DIALECT_CAPS["ch57x-1"].tested, true);
 }

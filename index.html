@@ -210,6 +210,9 @@ textarea{font-family:var(--mono);font-size:.78rem;resize:vertical;line-height:1.
   aspect-ratio:1;border-radius:3px;border:1px solid var(--line);cursor:pointer;padding:0;
 }
 .swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink);border-color:var(--ink)}
+.rgb-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
+.rgb-cell{display:flex;flex-direction:column;gap:.25rem;font-family:var(--mono);font-size:.7rem;color:var(--ink-2)}
+.rgb-cell input[type=color]{width:100%;height:2.5rem;padding:.15rem;background:var(--panel-2);border:1px solid var(--line);border-radius:3px;cursor:pointer}
 
 /* ---- log ---- */
 .log{
@@ -273,9 +276,10 @@ dialog h3{font-family:var(--disp);font-size:1.05rem;margin:0;letter-spacing:-.01
     <span class="status" id="status">disconnected</span>
     <button id="btnConnect" class="primary">Connect keypad</button>
     <button id="btnConnectAny" class="ghost" title="Drops the vendor-ID filter, for pads shipping under an unknown vendor id">Device not listed?</button>
-    <button id="btnRead" disabled>Read from keypad</button>
+    <button id="btnRead" disabled>Read keys &amp; knobs</button>
     <button id="btnWrite" disabled>Write to keypad</button>
     <button id="btnExport" class="ghost">Export</button>
+    <button id="btnExportPrewrite" class="ghost" disabled>Export pre-write backup</button>
     <button id="btnImport" class="ghost">Import</button>
     <input type="file" id="fileImport" accept="application/json" class="hidden">
   </div>
@@ -328,7 +332,7 @@ dialog h3{font-family:var(--disp);font-size:1.05rem;margin:0;letter-spacing:-.01
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="basicLedPanel">
       <header><h2>Backlight — this layer</h2></header>
       <div class="body stack" style="gap:.9rem">
         <div class="field">
@@ -352,6 +356,29 @@ dialog h3{font-family:var(--disp);font-size:1.05rem;margin:0;letter-spacing:-.01
       </div>
     </section>
 
+    <section class="card hidden" id="xzkjRgbPanel">
+      <header><h2>RGB draft — <span id="rgbLayerName">layer 1</span></h2></header>
+      <div class="body stack" style="gap:.8rem">
+        <p class="hint"><b>Experimental:</b> one RGB color change was verified on this keypad; other colors and modes have not all been checked. The app cannot reliably read existing lighting. Applying sends lighting reports for <b>all three layers</b>; the key bindings are read and checked before and after the full update. A power cycle may be needed for lighting changes to appear.</p>
+        <p class="hint">LED numbers are device slots, arranged to match the key grid. The Orientation selector rotates both grids.</p>
+        <label class="field">Lighting mode for this layer<select id="rgbMode">
+          <option value="0">Off (Mode 0)</option>
+          <option value="1">Static (Mode 1)</option>
+          <option value="2">Reactive — pressed key (Mode 2)</option>
+          <option value="3">Ripple — on keypress (Mode 3)</option>
+          <option value="4">Column wave (Mode 4)</option>
+          <option value="5">Row wave (Mode 5)</option>
+        </select></label>
+        <div class="row"><label class="field">Starting colour for all layers<input type="color" id="rgbFillColor" value="#ffffff"></label><button id="btnRgbFill" type="button">Fill all layers</button></div>
+        <p class="hint" id="rgbDraftStatus">Choose a starting colour and fill all layers to create a draft.</p>
+        <div id="rgbGrid" class="rgb-grid"></div>
+        <div class="row"><button id="btnRgbExport" type="button" disabled>Export RGB draft</button><button id="btnRgbImport" type="button">Import RGB draft</button><input id="rgbImportFile" type="file" accept="application/json" class="hidden"></div>
+        <button id="btnRgbApply" class="wide" disabled>Review and apply RGB to all layers</button>
+        <p class="hint">Experimental on this unit. Applying requires a separate confirmation. Some owners reported lighting freezes until reconnecting.</p>
+        <p id="rgbApplyStatus" class="hint" role="status"></p>
+      </div>
+    </section>
+
     <section class="card">
       <header>
         <h2>Device log</h2>
@@ -362,7 +389,7 @@ dialog h3{font-family:var(--disp);font-size:1.05rem;margin:0;letter-spacing:-.01
       </header>
       <div class="body stack" style="gap:.7rem">
         <div class="log" id="log">Ready. Nothing has been sent to the keypad.</div>
-        <p class="hint"><b>Read from keypad</b> uses <code>0xFA</code> and <code>0xFB</code> — both confirmed against this hardware. They are reads and change nothing on the device. A binding loaded from the keypad is written back <em>byte for byte</em> unless you edit it, so fields this tool has not fully decoded survive a round trip untouched.</p>
+      <p class="hint"><b>Read from keypad</b> uses <code>0xFA</code> and <code>0xFB</code>. The XZKJ 16-key/3-encoder <code>514C:8850</code> read request was captured from the vendor app and verified live. One key was changed and restored on a unit; other write cases remain unverified. Export a backup before changing bindings.</p>
       </div>
     </section>
   </div>
@@ -389,7 +416,7 @@ dialog h3{font-family:var(--disp);font-size:1.05rem;margin:0;letter-spacing:-.01
           it also turns the backlight off to save battery.)</div>
         </div>
         <div class="note">
-          <div><b>One write, all three layers.</b> Writing sends every binding you have set, layer by layer, then the backlight for each layer. Slots you never touched are left alone.</div>
+          <div><b>Review before writing.</b> Changes can span all three layers. The confirmation lists the affected controls; some devices also write lighting settings.</div>
         </div>
         <p class="hint">Bindings are kept in this browser under <code>localStorage</code>, so the page remembers them. That is a convenience, not a backup — use <b>Export</b> for anything you care about.</p>
         <p class="hint">This page never sends <code>0xEF</code>, the command that puts the keypad into its bootloader.</p>
@@ -492,9 +519,11 @@ const DIALECT_LABEL = {
 };
 const dialectName = d => DIALECT_LABEL[d] || d;
 
-/* What each dialect can do. ch57x-3 has no known LED command and no known read
-   command, so lighting, read-back, write verification, blanking and identity
-   repair are all unavailable there — it can only be written to, blind. */
+/* What each dialect can do. The ch57x-3 path has a one-key write/restore check,
+   but broader writes remain unverified. The vendor 0xFA read is confirmed for
+   the XZKJ 16-key/3-encoder variant.
+   Keep that read scoped to its confirmed layout; the reused USB id also covers
+   other boards that must follow their own detected dialect. */
 const DIALECT_CAPS = {
   "ch57x-1": { write: true, read: true,  led: true,  maxKeys: 15, knobBase: 16, maxSteps: 18, delay: true,  tested: true  },
   // Key bindings confirmed on a 6-key 1189:8890 by @wtown42 (issue #4). Knobs,
@@ -505,7 +534,9 @@ const DIALECT_CAPS = {
   // keycode *and* one per modifier, capped at CH3_MAX_ENTRIES, so a macro using
   // modifiers runs out sooner. Pre-flight catches that and names the key, which
   // is more useful than pretending a single number covers both cases.
-  "ch57x-3": { write: true, read: false, led: false, maxKeys: 16, knobBase: 17, maxSteps: 18, delay: true,  tested: false },
+  // Skip the generic all-zero wake report here: on this variant, start with the
+  // established read-only 0xFB identify exchange only.
+  "ch57x-3": { write: true, read: true, readLayouts: [[16, 3]], led: false, maxKeys: 16, knobBase: 17, maxSteps: 18, delay: true, tested: false, wake: false },
   // LCTECH's own format; see lcReports. One key combination per key, knob
   // slots from 101, no read-back, and no 0x03 in front of anything: the
   // vendor's configurator sends its type byte first. It also never sends the
@@ -690,6 +721,91 @@ const KNOB_GLYPH   = { ccw:"↺", press:"●", cw:"↻" };
    halfway through, with some slots already changed on the device. */
 const effDialect = () => forcedDialect || dialect;
 const effCaps    = () => DIALECT_CAPS[effDialect()] || DIALECT_CAPS[IMPLEMENTED_DIALECT];
+const canReadLayout = (keys, knobs, d = effDialect()) => {
+  const caps = DIALECT_CAPS[d];
+  return !!caps?.read && (!caps.readLayouts ||
+    caps.readLayouts.some(([k, n]) => k === keys && n === knobs));
+};
+const isConfirmedXzkj16x3 = () => !!device && device.vendorId === 0x514C &&
+  device.productId === 0x8850 && answered && deviceLayout?.keys === 16 && deviceLayout?.knobs === 3;
+function isCompleteCh3Backup(snapshot, targetDevice = device) {
+  if (!snapshot || !targetDevice || snapshot.format !== "macropad-rebind-device-backup" ||
+      snapshot.version !== 1 || snapshot.protocol !== "ch57x-3" ||
+      snapshot.device?.vendorId !== targetDevice.vendorId ||
+      snapshot.device?.productId !== targetDevice.productId ||
+      snapshot.layout?.keys !== 16 || snapshot.layout?.knobs !== 3 ||
+      snapshot.layout?.layers !== 3 || snapshot.layout?.slotsPerLayer !== 25 ||
+      snapshot.coverage?.expectedReplies !== 75 || snapshot.coverage?.receivedReplies !== 75 ||
+      !Array.isArray(snapshot.queryReports) || snapshot.queryReports.length !== 3 ||
+      !Array.isArray(snapshot.responseReports) || snapshot.responseReports.length !== 75 ||
+      !Array.isArray(snapshot.bindings) || snapshot.bindings.length !== 3) return false;
+
+  const parseReport = value => {
+    if (typeof value !== "string") return null;
+    const bytes = value.trim().split(/\s+/).map(part => /^[0-9a-f]{2}$/i.test(part)
+      ? Number.parseInt(part, 16) : NaN);
+    return bytes.length === REPORT_LEN && bytes.every(Number.isInteger) ? bytes : null;
+  };
+  const queryLayers = new Set();
+  for (const query of snapshot.queryReports) {
+    const bytes = parseReport(query.dataHex);
+    if (query.reportId !== REPORT_ID || ![1, 2, 3].includes(query.layer) ||
+        queryLayers.has(query.layer) || !bytes ||
+        bytes[0] !== 0xFA || bytes[1] !== 25 || bytes[2] !== 0 ||
+        bytes[3] !== query.layer || bytes[4] !== 0) return false;
+    queryLayers.add(query.layer);
+  }
+
+  const replySlots = new Set();
+  for (const reply of snapshot.responseReports) {
+    const bytes = parseReport(reply.dataHex);
+    const key = `${reply.layer}:${reply.slot}`;
+    if (reply.reportId !== REPORT_ID || ![1, 2, 3].includes(reply.layer) ||
+        !Number.isInteger(reply.slot) || reply.slot < 1 || reply.slot > 25 ||
+        replySlots.has(key) || !bytes || bytes[0] !== 0xFA ||
+        bytes[1] !== reply.slot || bytes[2] !== reply.layer) return false;
+    replySlots.add(key);
+  }
+  return queryLayers.size === 3 && replySlots.size === 75;
+}
+
+function profileMatchesCh3Backup(candidate, snapshot) {
+  if (!Array.isArray(candidate?.layers) || candidate.layers.length !== 3 ||
+      !Array.isArray(snapshot?.bindings) || snapshot.bindings.length !== 3) return false;
+  const canonical = value => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object")
+      return Object.fromEntries(Object.keys(value).filter(key => key !== "_mods")
+        .sort().map(key => [key, canonical(value[key])]));
+    return value;
+  };
+  const maps = layers => layers.map(layer => Object.fromEntries(
+    Object.entries(layer?.bindings || {}).filter(([, binding]) => !!binding)
+      .sort(([a], [b]) => Number(a) - Number(b))));
+  const backupMaps = snapshot.bindings.map(bindings => Object.fromEntries(
+    Object.entries(bindings || {}).filter(([, binding]) => !!binding)
+      .sort(([a], [b]) => Number(a) - Number(b))));
+  return JSON.stringify(canonical(maps(candidate.layers))) ===
+    JSON.stringify(canonical(backupMaps));
+}
+
+const canReadCurrentLayout = () => {
+  if (rgbBusy || !layoutFits(layout, effCaps()) ||
+      (deviceLayout && (layout.keys !== deviceLayout.keys || layout.knobs !== deviceLayout.knobs)))
+    return false;
+  if (effDialect() === "ch57x-3")
+    return isConfirmedXzkj16x3() && layout.keys === 16 && layout.knobs === 3 &&
+      canReadLayout(16, 3, "ch57x-3");
+  return canReadLayout(layout.keys, layout.knobs);
+};
+const canWriteCurrentLayout = () => {
+  if (rgbBusy || !layoutFits(layout, effCaps()) ||
+      (deviceLayout && (layout.keys !== deviceLayout.keys || layout.knobs !== deviceLayout.knobs)))
+    return false;
+  if (effDialect() === "ch57x-3")
+    return isConfirmedXzkj16x3() && layout.keys === 16 && layout.knobs === 3;
+  return true;
+};
 
 const stepLimit = () => effCaps().maxSteps ?? MAX_STEPS;
 const delayOK   = () => effCaps().delay !== false;
@@ -779,7 +895,12 @@ const LAYOUTS = [
   { keys: 16, knobs: 0, cols: 4, rows: 4 },   // ch57x-3 "4x4" devices
   { keys: 16, knobs: 1, cols: 4, rows: 4 },
   { keys: 16, knobs: 2, cols: 4, rows: 4 },
-  { keys: 16, knobs: 3, cols: 4, rows: 4 },
+  // On the user's XZKJ unit, the one-key check changed slot 1 from A to B,
+  // giving physical rows DHLP / CGKO / BFJN / BEIM; slot 1 was then restored
+  // to A. Slots 1..16 run bottom-to-top by column, like the generic CH57x grid.
+  { keys: 16, knobs: 3, cols: 4, rows: 4,
+    slotOrder: "column-major-bottom-to-top",
+    knobSlots: [[17, 18, 19], [20, 21, 22], [23, 24, 25]] },
 ];
 const DEFAULT_LAYOUT = { keys: 12, knobs: 2, cols: 3, rows: 4 };
 
@@ -827,7 +948,9 @@ function gridOrder(l) {
         case "counter-clockwise": hr = dc;              hc = l.cols - 1 - dr; break;
         default:                  hr = dr;              hc = dc;
       }
-      const slot = hc * l.rows + (l.rows - hr);
+      const slot = l.slotOrder === "row-major"
+        ? hr * l.cols + hc + 1
+        : hc * l.rows + (l.rows - hr);
       order.push(slot >= 1 && slot <= l.keys ? slot : 0);
     }
   return order;
@@ -851,6 +974,33 @@ function posOfSlot(l) {
    State
    ================================================================== */
 const STORE_KEY = "macropad-rebind.profile.v1";
+const RGB_STORE_KEY = "macropad-rebind.xzkj-rgb-draft.v1";
+
+function validRgbDraft(draft) {
+  return Array.isArray(draft?.layers) && draft.layers.length === 3 &&
+    draft.layers.every(colors => Array.isArray(colors) && colors.length === 16 &&
+      colors.every(color => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color))) &&
+    Array.isArray(draft.modes) && draft.modes.length === 3 &&
+    draft.modes.every(mode => Number.isInteger(mode) && mode >= 0 && mode <= 5);
+}
+function normalizeRgbDraft(draft) {
+  if (!draft || !Array.isArray(draft.layers)) return null;
+  // Version 1 drafts used mode 1 on every layer. Keep their existing meaning.
+  const modes = draft.modes === undefined ? [1, 1, 1] : draft.modes;
+  const normalized = { layers: draft.layers, modes };
+  return validRgbDraft(normalized) ? normalized : null;
+}
+function loadRgbDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(RGB_STORE_KEY) || "null");
+    return normalizeRgbDraft(draft);
+  } catch { return null; }
+}
+let rgbDraft = loadRgbDraft();
+let rgbBusy = false;
+function saveRgbDraft() {
+  try { localStorage.setItem(RGB_STORE_KEY, JSON.stringify(rgbDraft)); } catch { /* private mode */ }
+}
 
 function blankProfile() {
   return {
@@ -868,6 +1018,10 @@ let profile = loadProfile();
 let layer = 0;
 let sel = null;              // { slot, label }
 let device = null;
+let deviceLayout = null;      // last layout reported by 0xFB for this connection
+let liveDeviceBackup = null;  // current-session raw snapshot, independent of imported/editor profile
+let backupCapturedThisSession = false;
+let prewriteBackup = null;    // optional recovery snapshot from the last pre-write read
 let dialect = IMPLEMENTED_DIALECT;   // detected from the device on connect
 let forcedDialect = null;            // user override; see the format selector
 let formatHintShown = false;         // reveal the format selector once it matters
@@ -960,7 +1114,10 @@ function alignKnobBase() {
 }
 
 const curLayer  = () => profile.layers[layer];
-const bindingFor = slot => curLayer().bindings[slot] || null;
+const bindingFor = slot => {
+  const binding = curLayer().bindings[slot];
+  return binding?.type === "clear" ? null : binding || null;
+};
 
 /* ==================================================================
    Binding -> human label
@@ -986,6 +1143,44 @@ function bindingLabel(b) {
   }
   if (b.type === "raw") return "raw " + hex(b.raw.slice(3, 8));
   return "unset";
+}
+
+/** Compare the fields the encoder will send, not only the visible label. */
+function bindingSignature(b) {
+  if (!b || b.type === "clear") return "null";
+  if (b.type === "key")
+    return JSON.stringify({ type: b.type,
+      steps: (b.steps || []).map(s => [s.mods || 0, s.code || 0]), delay: b.delay || 0 });
+  if (b.type === "media") return JSON.stringify({ type: b.type, media: b.media || 0 });
+  if (b.type === "mouse") {
+    const result = { type: b.type, action: b.action, mod: b.mod || 0 };
+    // Editors can retain values from a previous action. Compare only fields
+    // that the encoder actually sends for this particular mouse action.
+    if (b.action === "click" || b.action === "drag") result.buttons = b.buttons || 0;
+    if (b.action === "wheel") result.wheel = b.wheel || 0;
+    if (b.action === "move" || b.action === "drag") { result.dx = b.dx || 0; result.dy = b.dy || 0; }
+    return JSON.stringify(result);
+  }
+  if (b.type === "raw") return JSON.stringify({ type: b.type, raw: b.raw || [] });
+  const rest = { ...b };
+  delete rest._raw;
+  delete rest._mods;
+  return JSON.stringify(rest);
+}
+
+function bindingDiffLabel(b) {
+  if (!b || b.type === "clear") return null;
+  const label = bindingLabel(b);
+  if (b.type === "key" && b.delay)
+    return `${label} (delay ${b.delay} ms between steps)`;
+  if (b.type === "mouse") {
+    const opts = [`modifier 0x${(b.mod || 0).toString(16).padStart(2, "0")}`];
+    if (b.action === "click") opts.push(`buttons 0x${(b.buttons || 0).toString(16).padStart(2, "0")}`);
+    if (b.action === "wheel") opts.push(`wheel ${b.wheel || 0}`);
+    if (b.action === "move" || b.action === "drag") opts.push(`x ${b.dx || 0}`, `y ${b.dy || 0}`);
+    return `${label} (${opts.join(", ")})`;
+  }
+  return label;
 }
 
 /* ==================================================================
@@ -1100,6 +1295,11 @@ let framing = DEFAULT_FRAMING;       // replaced from the descriptor on connect
 /** All reports needed to program one slot. */
 function bindingReports(slot, b) {
   const d = effDialect();
+  if (b?.type === "clear") {
+    if (d !== "ch57x-3") throw new Error("clearing individual bindings is not supported for this format");
+    // On the confirmed XZKJ unit, type 1 / count 0 restores an unbound slot.
+    return [msg([0xFD, slot, layer + 1, TYPE_KEYBOARD, 0, 0])];
+  }
   if (d === "ch57x-2") return ch2Reports(slot, b, layer);
   if (d === "ch57x-3") return ch3Reports(slot, b, layer);
   if (d === "lctech")  return lcReports(slot, b, layer);
@@ -1269,7 +1469,7 @@ function ch2Reports(slot, b, layerIdx) {
 
 /* ------------------------------------------------------------------
    ch57x-3 encoder (514C:8850), ported from ch57x-keyboard-tool's
-   src/keyboard/k8850_4x4.rs.
+   src/keyboard/k8850_4x4.rs and aligned with the vendor write capture.
 
    Structurally unlike ch57x-1:
      - write command 0xFD, and the header is 4 payload bytes not 10
@@ -1278,9 +1478,11 @@ function ch2Reports(slot, b, layerIdx) {
      - the 18-entry limit counts modifiers, so Ctrl+A costs two
      - media and mouse payloads are laid out differently again
      - mouse drag is not supported at all
-     - no LED command and no read command are known
+     - XZKJ per-key lighting uses a separate, experimental RGB action
 
-   NOT verified against hardware — nobody here has one of these.
+   A one-key write/restore was verified on the XZKJ 16x3 unit. Modifier-only
+   output uses the vendor's observed read format but has not been written and
+   tested by this app on real hardware.
    ------------------------------------------------------------------ */
 const CH3_MODS  = [0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8];  // bit 0..7
 const CH3_MOUSE = { 0x01: 0xF1, 0x02: 0xF2, 0x04: 0xF3 };            // ctrl/shift/alt
@@ -1292,16 +1494,24 @@ function ch3Reports(slot, b, layerIdx) {
 
   if (b.type === "key") {
     const entries = [];
-    for (const st of b.steps) {
+    for (let stepIndex = 0; stepIndex < b.steps.length; stepIndex++) {
+      const st = b.steps[stepIndex];
       for (let bit = 0; bit < 8; bit++)
-        if (st.mods & (1 << bit)) entries.push(CH3_MODS[bit]);
-      entries.push(st.code || 0);
+        if (st.mods & (1 << bit)) entries.push({ code: CH3_MODS[bit], delay: 0 });
+      const delay = stepIndex ? Math.max(0, Math.min(6000, b.delay | 0)) : 0;
+      // A single modifier-only binding uses just its modifier token. A real
+      // XZKJ vendor read returned count 1 / F2 for a working held Shift;
+      // appending a zero-key entry produced a different, nonworking binding.
+      const singleModifierOnly = b.steps.length === 1 && !st.code &&
+        st.mods && (st.mods & (st.mods - 1)) === 0;
+      if (!singleModifierOnly) entries.push({ code: st.code || 0, delay });
     }
     if (entries.length > CH3_MAX_ENTRIES)
       throw new Error(`too long for this device: ${entries.length} entries, ` +
                       `${CH3_MAX_ENTRIES} max (modifiers count separately)`);
     const body = [];
-    for (const c of entries) body.push(0, 0, c);
+    for (const { code, delay } of entries)
+      body.push((delay >> 8) & 0xff, delay & 0xff, code);
     m = [...head, TYPE_KEYBOARD, 0, entries.length, ...body];
 
   } else if (b.type === "media") {
@@ -1321,8 +1531,21 @@ function ch3Reports(slot, b, layerIdx) {
   } else {
     return [];
   }
-  // One terminator, and no 0xAA separators — unlike ch57x-1.
-  return [msg(m), msg([CMD_COMMIT, 0xFE, 0xFF])];
+  // The vendor app stages records and sends one FD FE FF terminator after the
+  // complete configuration. writeAll owns that single commit; no 0xAA separators.
+  return [msg(m)];
+}
+
+/** XZKJ RGB record as captured from MINI_KEYBOARD. Report ID is added by
+    WebHID; the LED layer index is zero-based. There are 16 RGB triplets total. */
+function xzkjRgbReport(layerIdx, colors, mode = 1) {
+  if (!Number.isInteger(layerIdx) || layerIdx < 0 || layerIdx > 2 ||
+      !Number.isInteger(mode) || mode < 0 || mode > 5 ||
+      !Array.isArray(colors) || colors.length !== 16 ||
+      !colors.every(c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)))
+    throw new Error("RGB requires 16 valid colours on each of three layers");
+  const bytes = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  return msg([0xFE, 0xB0, layerIdx, mode, ...colors.flatMap(bytes)]);
 }
 
 /** The record this device stores for a key that does nothing. */
@@ -1355,16 +1578,93 @@ function ledReports(layerIdx, led) {
 const i8 = v => ((v | 0) + 256) & 0xff;
 const hex = u8 => Array.from(u8, b => b.toString(16).padStart(2, "0")).join(" ");
 
-/* ------------------------------------------------------------------
-   Decoding a stored record.
+/* Decode XZKJ 16x3 0xFA replies. Retain the complete reply and leave any
+   non-canonical or unrepresentable record opaque rather than guessing. */
+function decodeCh3Record(d) {
+  const raw = Array.from(d);
+  if (d[0] !== 0xFA || d.length < 6)
+    return { type: "raw", raw, _raw: raw };
+  const type = d[3], count = d[5];
+  if (type === TYPE_MEDIA) {
+    // Captured device replies use flag 1; the writer emits flag 0. The two
+    // consumer-usage bytes occupy the third byte of two 3-byte entries.
+    if (d.length !== 64 || ![0, 1].includes(d[4]) || count !== 2 ||
+        [6, 7, 9, 10].some(i => d[i] !== 0) || d.slice(12).some(v => v !== 0))
+      return { type: "raw", raw, _raw: raw };
+    const media = d[8] | (d[11] << 8);
+    return MEDIA.some(([, code]) => code === media)
+      ? { type: "media", media, _raw: raw }
+      : { type: "raw", raw, _raw: raw };
+  }
+  if (type === TYPE_MOUSE) {
+    // The device's mouse block has separate 3-byte fields for modifier,
+    // buttons, X, Y and wheel. Preserve combinations the editor cannot write.
+    if (d.length !== 64 || d[4] !== 1 || count !== 4 ||
+        [6, 7, 9, 10, 12, 13, 15, 16, 18, 19].some(i => d[i] !== 0) ||
+        d.slice(21).some(v => v !== 0))
+      return { type: "raw", raw, _raw: raw };
+    const modEntry = Object.entries(CH3_MOUSE).find(([, token]) => token === d[8]);
+    if (d[8] && !modEntry) return { type: "raw", raw, _raw: raw };
+    const mod = modEntry ? Number(modEntry[0]) : 0;
+    const buttons = d[11], dx = s8(d[14]), dy = s8(d[17]), wheel = s8(d[20]);
+    if ([dx, dy, wheel].includes(-128)) return { type: "raw", raw, _raw: raw };
+    if ([1, 2, 4].includes(buttons) && !dx && !dy && !wheel)
+      return { type: "mouse", action: "click", buttons, mod, _raw: raw };
+    if (!buttons && !dx && !dy && wheel)
+      return { type: "mouse", action: "wheel", wheel, mod, _raw: raw };
+    if (!buttons && !wheel && (dx || dy))
+      return { type: "mouse", action: "move", dx, dy, mod, _raw: raw };
+    return { type: "raw", raw, _raw: raw };
+  }
+  if (type !== TYPE_KEYBOARD)
+    return type === 0 ? null : { type: "raw", raw, _raw: raw };
+  if (count > CH3_MAX_ENTRIES || d.length < 6 + 3 * count)
+    return { type: "raw", raw, _raw: raw };
+  if (!count) return null;
 
-   Confirmed against this hardware: the 0xFA reply uses the same field
-   layout as a 0xFE write, with 0xFA in byte 0.
+  // The vendor configurator stores a held Shift as one F2 entry, with other
+  // bytes after the declared count. Preserve the complete reply in _raw.
+  if (count === 1 && d[6] === 0 && d[7] === 0 && d[8] >= 0xF1 && d[8] <= 0xF8)
+    return { type: "key", steps: [{ mods: 1 << (d[8] - 0xF1), code: 0 }], delay: 0, _raw: raw };
 
-     [0] 0xFA   [1] slot   [2] layer(1-based)   [3] type
-     [9] count / mouse action   [10..] payload
-   ------------------------------------------------------------------ */
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    const at = 6 + 3 * i;
+    entries.push({ delay: (d[at] << 8) | d[at + 1], code: d[at + 2] });
+  }
+
+  const steps = [];
+  const stepDelays = [];
+  let mods = 0;
+  for (const entry of entries) {
+    if (entry.code >= 0xF1 && entry.code <= 0xF8) {
+      if (entry.delay) return { type: "raw", raw, _raw: raw };
+      mods |= 1 << (entry.code - 0xF1);
+      continue;
+    }
+    if (!entry.code && !mods) {
+      if (entry.delay) return { type: "raw", raw, _raw: raw };
+      continue;
+    }
+    if (entry.delay && !steps.length)
+      return { type: "raw", raw, _raw: raw }; // the editor models inter-step delays only
+    steps.push({ mods, code: entry.code });
+    stepDelays.push(entry.delay);
+    mods = 0;
+  }
+  if (mods) return { type: "raw", raw, _raw: raw };
+  if (!steps.length) return null;
+
+  const between = stepDelays.slice(1);
+  const uniqueDelays = [...new Set(between)];
+  if (uniqueDelays.length > 1)
+    return { type: "raw", raw, _raw: raw }; // one editor delay cannot represent this sequence
+  return { type: "key", steps, delay: uniqueDelays[0] || 0, _raw: raw };
+}
+
+/* Standard replies use a different, dialect-specific 0xFA record layout. */
 function decodeRecord(d) {
+  if (effDialect() === "ch57x-3") return decodeCh3Record(d);
   const type = d[3], count = d[9];
   const raw = Array.from(d);
 
@@ -1467,14 +1767,14 @@ function diffProfiles(fromDev, toEdit, forLayout) {
     for (const slot of [...slots].sort((a, b) => a - b)) {
       const a = fromDev.layers[l].bindings[slot] || null;
       const b = toEdit.layers[l].bindings[slot] || null;
-      const from = a ? bindingLabel(a) : null;
-      const to   = b ? bindingLabel(b) : null;
-      if (from === to) continue;
+      let from = a ? bindingDiffLabel(a) : null;
+      let to   = b ? bindingDiffLabel(b) : null;
+      if (bindingSignature(a) === bindingSignature(b)) continue;
       rows.push({
         layer: l, slot,
         name: `L${l + 1} ${slotName(slot, pos)}`,
         from, to,
-        kind: !a ? "add" : !b ? "del" : "chg",
+        kind: b?.type === "clear" ? "clear" : !a ? "add" : !b ? "del" : "chg",
       });
     }
   }
@@ -1519,13 +1819,18 @@ const layoutFits = (f, caps) =>
     actually answered, not merely to be assumed standard. */
 function applyCaps() {
   const caps = effCaps();
-  $("btnRead").disabled   = !device || !caps.read;
-  $("btnDetect").disabled = !device || !caps.read;
-  $("btnBlank").disabled  = !device || !verified || !answered || !caps.tested;
-  $("btnRepair").disabled = !device || !verified || !answered || !caps.tested;
+  $("btnRead").disabled   = !device || !canReadCurrentLayout();
+  $("btnDetect").disabled = rgbBusy || !device || !caps.read;
+  $("btnWrite").disabled  = !device || !verified || !canWriteCurrentLayout();
+  const layoutFitsDevice = layoutFits(layout, caps) && (!deviceLayout ||
+    (layout.keys === deviceLayout.keys && layout.knobs === deviceLayout.knobs));
+  $("btnBlank").disabled  = rgbBusy || !device || !verified || !answered || !caps.tested || !layoutFitsDevice;
+  $("btnRepair").disabled = rgbBusy || !device || !verified || !answered || !caps.tested || !layoutFitsDevice;
+  renderRgb();
 }
 
 async function connect(broad) {
+  if (rgbBusy) return;
   try {
     const list = await navigator.hid.requestDevice({
       // The retry drops every constraint, not just the vendor id. Keeping
@@ -1549,6 +1854,12 @@ async function connect(broad) {
       return;
     }
     device = pickInterface(list);
+    deviceLayout = null;
+    liveDeviceBackup = null;
+    backupCapturedThisSession = false;
+    verified = false;
+    answered = false;
+    $("btnWrite").disabled = true;
     if (list.length > 1)
       log(`Your keypad has ${list.length} HID interfaces: ` +
           list.map((d, i) => `${i + 1}) ${pagesOf(d).join(" + ") || "none"}`).join(", ") +
@@ -1610,25 +1921,29 @@ async function connect(broad) {
     const model = modelFor(device.vendorId, device.productId, device.productName);
     dialect = model ? model.dialect : IMPLEMENTED_DIALECT;
 
-    // The USB id picks a format, but an id is only a guess: 514c:8850 is filed
-    // under a format with no read command, yet at least one 12-key, 4-knob unit
-    // with that id answers 0xFB and 0xFA exactly like the standard format, and
-    // so was left with Read and lighting switched off for no reason. A keypad
-    // that answers the standard identify command with a layout the standard
-    // format can address is speaking it, whatever the table says. 0xFB is a
-    // read, so asking costs nothing. Only ch57x-3 is asked, on purpose: that is
-    // the format with evidence against it. ch57x-2 (1189:8890) has key bindings
-    // confirmed on hardware and its format is already disputed, so it is not
-    // second-guessed here; LCTECH's expects nothing but its own reports.
+    // The USB id picks an initial format, but 514C:8850 is reused by different
+    // boards. Probe ch57x-3 with the read-only identify command: a 12x4 answer
+    // is the known Standard variant, while the captured XZKJ 16x3 answer stays
+    // ch57x-3 and enables only its confirmed read path. Do not probe the other
+    // dialects; their identify behavior is not established.
     let found = null;
-    if (!forcedDialect && dialect === "ch57x-3") {
+    if (dialect === "ch57x-3") {
       const early = await detect(true);
+      found = early;
       if (early && layoutFits(early, DIALECT_CAPS[IMPLEMENTED_DIALECT])) {
+        if (forcedDialect && forcedDialect !== IMPLEMENTED_DIALECT)
+          log(`0xFB identified a layout supported by Standard. Ignoring the incompatible ` +
+              `manual format override.`, "w");
+        forcedDialect = null;
         log(`This keypad's USB id is listed under the "${dialectName(dialect)}" format, but it ` +
             `answers the standard read commands, so it is being treated as "` +
             `${dialectName(IMPLEMENTED_DIALECT)}". Reading and lighting are switched on.`, "g");
         dialect = IMPLEMENTED_DIALECT;
         found = early;
+      } else if (early?.keys === 16 && early?.knobs === 3 && forcedDialect && forcedDialect !== "ch57x-3") {
+        log(`0xFB identified the captured XZKJ 16x3 variant. Ignoring the incompatible ` +
+            `manual format override; automatic ch57x-3 is required for its confirmed read path.`, "w");
+        forcedDialect = null;
       }
     }
     const caps = effCaps();
@@ -1641,19 +1956,33 @@ async function connect(broad) {
         ? `Your keypad speaks a different command format from the one this tool was ` +
           `built against. It has been confirmed on real hardware for ` +
           `${caps.confirmed}; other functions are less certain.`
+        : dialect === "ch57x-3" && found?.keys === 16 && found?.knobs === 3
+          ? `The XZKJ 16x3 read was captured from the vendor app. A one-key write and ` +
+            `restore, and one RGB color change, were verified on one unit; other ` +
+            `devices and write cases remain experimental.`
         : `Your keypad speaks a different command format from the one this tool has ` +
           `been tested against. Support for it was written from other people's ` +
           `research and has never been tried on real hardware.`, "w");
-      log(`You can still write to it, but at your own risk: this format has no way ` +
-          `to read the keypad back, so nothing can be checked afterwards.`, "w");
-      if (!caps.led) log(`Backlight control is unavailable for it, so those settings are switched off.`, "w");
-      log(`Set your model with the Layout dropdown — this keypad cannot be asked.`, "w");
-      log(`If the keys do not respond after writing, try the other command format ` +
-          `from the dropdown next to the model. Please report either way: ` +
-          `github.com/jvspier/macropad-rebind/issues (format id: ${dialect})`, "w");
+      if (caps.read && found && canReadLayout(found.keys, found.knobs, dialect))
+        log(`Read-back is confirmed for this ${found.keys}-key/${found.knobs}-encoder layout. ` +
+            (isConfirmedXzkj16x3()
+              ? `One key was changed and restored on one XZKJ unit; other write cases remain unverified. `
+              : `Writing remains experimental for this variant. `) +
+            `A full binding backup can be exported if needed.`, "w");
+      else if (caps.read)
+        log(`This layout is outside the confirmed read path. Do not rely on read-back ` +
+            `for this variant.`, "w");
+      else
+        log(`This format has no confirmed read-back, so writes cannot be checked.`, "w");
+      if (!caps.led) log(isConfirmedXzkj16x3()
+        ? `Use the separate RGB draft panel for experimental per-key lighting.`
+        : `Backlight control is unavailable for it, so those settings are switched off.`, "w");
+      if (!found) log(`Set the model with the Layout dropdown; this keypad did not identify itself.`, "w");
+      log(`Do not switch formats and write as a diagnostic: a wrong format may be accepted ` +
+          `without changing the keypad. Report the device log instead.`, "w");
     }
 
-    $("btnRead").disabled = !caps.read;
+    $("btnRead").disabled = !canReadCurrentLayout();
     $("btnDetect").disabled = !caps.read;
 
     // Positively identify the device before enabling anything that writes. The
@@ -1671,15 +2000,14 @@ async function connect(broad) {
       verified = true;
     }
     if (verified) {
-      $("btnWrite").disabled = false;
-      // Blanking and identity repair both rely on ch57x-1 specifics — the empty
-      // record shape and 0xFC — neither of which is known for other dialects.
-      applyCaps();
       const known = found && findLayout(found.keys, found.knobs);
       if (known && (known.keys !== layout.keys || known.knobs !== layout.knobs)) {
         setLayout(known);
         log(`Layout adopted: ${known.keys} keys, ${known.knobs} knobs.`, "g");
       }
+      // Blanking and identity repair rely on ch57x-1 specifics; ch57x-3 has
+      // only a single-key write/restore check, despite its confirmed read path.
+      applyCaps();
     } else if (found) {
       // It answered, and we refused. Say so plainly: blaming the hardware for
       // a shape this tool cannot address sent one contributor chasing a fault
@@ -1708,6 +2036,9 @@ async function connect(broad) {
 
 function disconnected() {
   device = null;
+  deviceLayout = null;
+  liveDeviceBackup = null;
+  backupCapturedThisSession = false;
   framing = DEFAULT_FRAMING;
   dialect = IMPLEMENTED_DIALECT;
   // The override belongs to the keypad it was chosen for. The selector hides
@@ -1724,6 +2055,7 @@ function disconnected() {
   $("btnBlank").disabled = true;
   $("btnRepair").disabled = true;
   renderLed();
+  renderRgb();
   log("Device disconnected.", "w");
 }
 
@@ -1749,7 +2081,7 @@ async function collect(want, ms) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function send(report, label) {
+async function send(report, label, pauseMs = 6) {
   // The 0x03 moved into the data for report-id-less devices belongs to the
   // ch57x formats. LCTECH's messages start with their own type byte.
   const f = effCaps().prefix === false ? { ...framing, prefix: null } : framing;
@@ -1763,7 +2095,7 @@ async function send(report, label) {
                     `in chrome://device-log.`);
   }
   log(`out ${hex(report.subarray(0, 16))}${label ? "   " + label : ""}`);
-  await sleep(6);
+  if (pauseMs > 0) await sleep(pauseMs);
 }
 
 /** Show the diff and resolve true if the user confirms. */
@@ -1773,9 +2105,10 @@ function confirmDiff(rows, untouched) {
     // writeAll filters "del" rows out before calling: a slot the editor has no
     // binding for is left alone, not cleared. The seed keeps the tally honest
     // rather than NaN should another caller ever pass one.
-    const counts = rows.reduce((a, r) => (a[r.kind]++, a), { add: 0, del: 0, chg: 0 });
+    const counts = rows.reduce((a, r) => (a[r.kind]++, a), { add: 0, del: 0, chg: 0, clear: 0 });
     $("diffSum").textContent =
       `${counts.add} added · ${counts.chg} changed` +
+      (counts.clear ? ` · ${counts.clear} cleared` : "") +
       (untouched ? ` · ${untouched} left untouched` : "");
     body.textContent = "";
     const t = document.createElement("table");
@@ -1800,6 +2133,13 @@ function confirmDiff(rows, untouched) {
     }
     t.append(tb);
     body.append(t);
+    if (effDialect() === "ch57x-3" && isConfirmedXzkj16x3()) {
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.style.marginTop = ".8rem";
+      note.textContent = "The read path and a one-key write/restore were confirmed on this keypad. Clearing one slot was also verified on this unit; other slots and write cases remain unverified. Only the listed changes will be sent. The pre-write binding snapshot can be exported from the top bar.";
+      body.append(note);
+    }
     if (untouched) {
       const note = document.createElement("p");
       note.className = "hint";
@@ -1841,10 +2181,17 @@ function preflight() {
 }
 
 async function writeAll() {
-  if (!device) return;
+  if (!device || rgbBusy) return;
   const btn = $("btnWrite");
   btn.disabled = true;
+  let ch3WriteAttempted = false;
   try {
+    if (!verified || !canWriteCurrentLayout()) {
+      log(effDialect() === "ch57x-3"
+        ? "Writing is disabled until the identified device and selected 16x3 layout match."
+        : "Writing is disabled until the detected layout and command format match.", "e");
+      return;
+    }
     // Look before you leap: read what is actually on the device and show
     // exactly what this write would change.
     // Encode everything first. The encoders reject bindings that do not fit
@@ -1860,7 +2207,9 @@ async function writeAll() {
       log(`Shorten them, or check the command format is right for your keypad.`, "w");
       return;
     }
-    if (!effCaps().read) {
+    let writeOnlyChanged = null;
+    const canReadBeforeWrite = canReadCurrentLayout();
+    if (!canReadBeforeWrite) {
       const n = profile.layers.reduce((a, l) => a + Object.values(l.bindings).filter(Boolean).length, 0);
       if (!n) { log("Nothing in the editor to write.", "w"); return; }
       if (!confirm(`Write ${n} binding(s)?\n\nThis device cannot be read back, so ` +
@@ -1869,6 +2218,7 @@ async function writeAll() {
     } else {
     log("Reading current config so the changes can be shown first.", "w");
     const onDevice = await readDeviceProfile(layout.keys, layout.knobs, false);
+    if (effDialect() === "ch57x-3") rememberPrewriteBackup(onDevice);
     // Write only sends what the editor holds; it never clears a slot the editor
     // has no binding for. So a "del" row is not a pending change — it is a slot
     // that will simply be left alone, and showing it as a change is misleading.
@@ -1884,6 +2234,14 @@ async function writeAll() {
       log("Write cancelled. Nothing was sent.", "w");
       return;
     }
+    if (effDialect() === "ch57x-3") {
+      writeOnlyChanged = new Set(rows.map(r => `${r.layer}:${r.slot}`));
+      // The prior current-device snapshot may be stale after a write attempt.
+      backupCapturedThisSession = false;
+      liveDeviceBackup = null;
+      ch3WriteAttempted = true;
+      applyCaps();
+    }
     }
     let slots = 0;
     const saved = layer;
@@ -1892,23 +2250,25 @@ async function writeAll() {
       const lay = profile.layers[l];
       for (const [slot, b] of Object.entries(lay.bindings)) {
         if (!b) continue;
-        for (const r of bindingReports(Number(slot), b)) await send(r);
-        slots++;
+        if (writeOnlyChanged && !writeOnlyChanged.has(`${l}:${slot}`)) continue;
+        const reports = bindingReports(Number(slot), b);
+        for (const r of reports) await send(r);
+        if (reports.length) slots++;
       }
       if (effCaps().led)
         for (const r of ledReports(l, lay.led)) await send(r);
     }
     layer = saved;
-    log(`Sent ${slots} binding${slots === 1 ? "" : "s"} and ${N_LAYERS} backlight settings.`);
+    if (effDialect() === "ch57x-3" && slots) await send(msg([CMD_COMMIT, 0xFE, 0xFF]));
+    log(`Sent ${slots} binding${slots === 1 ? "" : "s"}` +
+        (effCaps().led ? ` and ${N_LAYERS} backlight settings.` : "."));
 
     // Read it straight back. "The write returned no error" is not the same as
     // "the device stored it", and on unfamiliar variants that gap is exactly
     // where the surprises live.
-    if (!effCaps().read) {
+    if (!canReadCurrentLayout()) {
       formatHintShown = true;
-      log("This keypad cannot be read back, so the write cannot be checked. Try your " +
-          "keys. If nothing happens, use the command-format dropdown next to the " +
-          "model picker and write again.", "w");
+      log("This keypad cannot be read back in the selected layout, so the write cannot be checked.", "w");
       renderAll();
       return;
     }
@@ -1937,14 +2297,19 @@ async function writeAll() {
   } catch (err) {
     log("Write failed: " + err.message, "e");
   } finally {
-    btn.disabled = !device;
+    if (ch3WriteAttempted) {
+      applyCaps();
+      log("The pre-write binding snapshot can be exported until another write or page close.", "w");
+    } else {
+      btn.disabled = !device || !verified || !canWriteCurrentLayout();
+    }
   }
 }
 
 /** Write an empty binding to every key and knob action, on all layers. */
 /** Send just this layer's backlight record, without a full write. */
 async function applyLed() {
-  if (!device) return;
+  if (!device || rgbBusy) return;
   const btn = $("btnApplyLed");
   btn.disabled = true;
   try {
@@ -1957,8 +2322,83 @@ async function applyLed() {
   }
 }
 
+/** Compare all raw binding replies without interpreting or changing them. */
+function sameRawBindingReports(expected, actual) {
+  if (!Array.isArray(expected) || !Array.isArray(actual) || expected.length !== 75 || actual.length !== 75)
+    return false;
+  const key = r => `${r.layer}:${r.slot}`;
+  const map = new Map(expected.map(r => [key(r), r.dataHex.toLowerCase()]));
+  if (map.size !== 75 || new Set(actual.map(key)).size !== 75) return false;
+  return actual.every(r => r.reportId === REPORT_ID && map.get(key(r)) === r.dataHex.toLowerCase());
+}
+
+/** Explicit RGB action. Key bindings are read before and after; no key
+    binding report or commit is ever part of this lighting path. */
+async function applyXzkjRgb() {
+  if (rgbBusy || collector || $("btnRead").disabled || $("btnWrite").disabled ||
+      !isConfirmedXzkj16x3() || !verified || effDialect() !== "ch57x-3" ||
+      !canWriteCurrentLayout() || !validRgbDraft(rgbDraft) ||
+      framing.id !== 3 || framing.len !== 64 || framing.prefix !== null || framing.none) return;
+  const target = device;
+  let baseline = null;
+  const reports = rgbDraft.layers.map((colors, i) => xzkjRgbReport(i, colors, rgbDraft.modes[i]));
+  if (!confirm("Apply this RGB draft to ALL THREE layers?\n\n" +
+      "This replaces the existing lighting on all three layers. Current lighting cannot be read or restored from the key-mapping backup. " +
+      "One RGB color change has been verified on your unit; other cases remain experimental, and other owners reported lighting freezes. " +
+      "The app will read all 75 key bindings before applying and keep an optional exportable snapshot. It will then send three lighting reports consecutively, as captured from MINI_KEYBOARD, and compare bindings afterward. Continue?")) return;
+
+  let attempted = false;
+  const connectDisabled = $("btnConnect").disabled;
+  const connectAnyDisabled = $("btnConnectAny").disabled;
+  rgbBusy = true;
+  $("rgbApplyStatus").textContent = "Reading current key bindings…";
+  $("btnConnect").disabled = true;
+  $("btnConnectAny").disabled = true;
+  applyCaps(); renderLed();
+  try {
+    const before = await readDeviceProfile(16, 3, false);
+    if (device !== target || !isConfirmedXzkj16x3())
+      throw new Error("the device changed or disconnected during the binding read");
+    baseline = rememberPrewriteBackup(before);
+    // The prior current-device snapshot may be stale after the first output.
+    backupCapturedThisSession = false;
+    liveDeviceBackup = null;
+    attempted = true;
+    applyCaps();
+    for (let i = 0; i < reports.length; i++) {
+      if (device !== target || !isConfirmedXzkj16x3()) throw new Error("device disconnected during lighting update");
+      // The captured manufacturer save sent these three reports consecutively.
+      // Our earlier version inserted three FA reads after each report; whether
+      // that interrupts lighting is unknown, so follow the observed sequence.
+      await send(reports[i], `RGB lighting layer ${i + 1}`, 0);
+    }
+    await sleep(200);
+    $("rgbApplyStatus").textContent = "Checking key bindings after the lighting reports…";
+    if (device !== target || !isConfirmedXzkj16x3()) throw new Error("device disconnected before mapping verification");
+    const after = await readDeviceProfile(16, 3, false);
+    if (!sameRawBindingReports(baseline.responseReports, after._deviceReadRecords))
+      throw new Error("key mappings differ after the lighting reports");
+    const message = "RGB reports sent for all three layers. All 75 key binding reports matched the pre-write snapshot afterward. Lighting cannot be read back; check the LEDs, including after a full power cycle.";
+    $("rgbApplyStatus").textContent = message;
+    log(message, "g");
+  } catch (err) {
+    const message = attempted
+      ? `RGB update or mapping verification failed: ${err.message}. Lighting may have changed; export the pre-write binding snapshot before closing this page.`
+      : `RGB update stopped before sending lighting: ${err.message}.`;
+    $("rgbApplyStatus").textContent = message;
+    log(message, "e");
+    if (attempted) alert(message);
+  } finally {
+    rgbBusy = false;
+    $("btnConnect").disabled = connectDisabled;
+    $("btnConnectAny").disabled = connectAnyDisabled;
+    applyCaps(); renderLed();
+    if (attempted) log("The pre-write binding snapshot can be exported until another write or page close.", "w");
+  }
+}
+
 async function blankKeypad() {
-  if (!device) return;
+  if (!device || rgbBusy) return;
   if (!confirm(
     `Blank layer ${layer + 1} on the keypad?\n\n` +
     `Every key and knob action on this layer is overwritten with an empty binding. ` +
@@ -2037,12 +2477,21 @@ async function detect(strict) {
   }
   const keys = got[0][1], knobs = got[0][2];
   log(`Layout: ${keys} keys, ${knobs} knobs.`, "g");
-  return { keys, knobs };
+  const found = { keys, knobs };
+  if (got[0][0] === 0xFB) deviceLayout = found;
+  return found;
 }
 
 /** The 0xFA read command for a layout. Normally just [keys, knobs], but a
     layout may declare `readAs` when its hardware answers to something else. */
 function readCommand(keys, knobs, layerNumber) {
+  if (effDialect() === "ch57x-3") {
+    if (keys !== 16 || knobs !== 3)
+      throw new Error("ch57x-3 read-back is confirmed only for the XZKJ 16-key/3-encoder layout");
+    // Captured from MINI_KEYBOARD's View settings exchange: 25 binding slots,
+    // zero separately-addressed knobs, one-based layer, then a zero byte.
+    return [0xFA, 25, 0, layerNumber, 0];
+  }
   const [k, n] = findLayout(keys, knobs)?.readAs || [keys, knobs];
   return [0xFA, k, n, layerNumber];
 }
@@ -2050,14 +2499,36 @@ function readCommand(keys, knobs, layerNumber) {
 /** Pull every stored record off the device and return it as a profile. */
 async function readDeviceProfile(keys, knobs, verbose) {
   const want = keys + 3 * knobs;
+  const ch3 = effDialect() === "ch57x-3";
+  if (ch3 && !canReadLayout(keys, knobs, "ch57x-3"))
+    throw new Error("read-back is not confirmed for this ch57x-3 layout");
   const next = blankProfile();
+  if (ch3) {
+    next._deviceReadRequests = [];
+    next._deviceReadRecords = [];
+  }
   for (let l = 0; l < N_LAYERS; l++) {
     if (verbose) log(`0xFA — reading layer ${l + 1} (read only).`, "w");
+    const request = msg(readCommand(keys, knobs, l + 1));
+    if (ch3) next._deviceReadRequests.push({
+      reportId: REPORT_ID, layer: l + 1, dataHex: hex(request),
+    });
     const got = (await Promise.all([
       collect(want, 2500),
-      send(msg(readCommand(keys, knobs, l + 1))),
+      send(request),
     ]))[0];
+    const layerSlots = new Set();
     for (const d of got) {
+      if (ch3) {
+        if (d[0] !== 0xFA || d[2] !== l + 1 || d[1] < 1 || d[1] > 25) continue;
+        if (layerSlots.has(d[1]))
+          throw new Error(`layer ${l + 1} returned slot ${d[1]} more than once; profile not replaced`);
+        layerSlots.add(d[1]);
+        next._deviceReadRecords.push({
+          reportId: REPORT_ID, slot: d[1], layer: l + 1,
+          dataHex: hex(d),
+        });
+      }
       // Layer 3 comes back out of order on this hardware, so trust the slot
       // byte in the reply rather than the arrival order.
       const slot = d[1];
@@ -2068,26 +2539,70 @@ async function readDeviceProfile(keys, knobs, verbose) {
       const b = decodeRecord(d);
       if (b) next.layers[l].bindings[slot] = b;
     }
+    if (ch3 && layerSlots.size !== 25) {
+      const missing = Array.from({ length: 25 }, (_, i) => i + 1)
+        .filter(slot => !layerSlots.has(slot));
+      throw new Error(`layer ${l + 1} read was incomplete (${layerSlots.size}/25; ` +
+                      `missing ${missing.join(", ")}); profile not replaced`);
+    }
     if (verbose) log(`layer ${l + 1}: ${got.length} record(s), ${Object.keys(next.layers[l].bindings).length} bound.`);
   }
   return next;
 }
 
+/** Build a complete, exportable binding snapshot from a successful XZKJ read. */
+function makeXzkjBackup(next) {
+  const snapshot = {
+    format: "macropad-rebind-device-backup", version: 1,
+    capturedAt: new Date().toISOString(),
+    device: { vendorId: device.vendorId, productId: device.productId, productName: device.productName || "" },
+    protocol: "ch57x-3",
+    layout: { keys: 16, knobs: 3, slotsPerLayer: 25, layers: N_LAYERS },
+    slotMap: { keys: { first: 1, last: 16, order: "column-major-bottom-to-top" },
+      encoders: { first: 17, count: 3, actions: ["ccw", "press", "cw"] } },
+    scope: "Configuration binding reports only; LED and other global settings are not covered.",
+    bindings: JSON.parse(JSON.stringify(next.layers.map(l => l.bindings))),
+    coverage: { expectedReplies: 75, receivedReplies: next._deviceReadRecords.length,
+      layers: [1, 2, 3].map(n => ({ layer: n, slots: 25 })) },
+    queryReports: next._deviceReadRequests,
+    responseReports: next._deviceReadRecords,
+  };
+  if (!isCompleteCh3Backup(snapshot)) throw new Error("the 75-report binding snapshot was incomplete");
+  return snapshot;
+}
+
+function rememberPrewriteBackup(next) {
+  const snapshot = makeXzkjBackup(next);
+  prewriteBackup = { knobBase: 17, layers: JSON.parse(JSON.stringify(next.layers)), deviceBackup: snapshot };
+  $("btnExportPrewrite").disabled = false;
+  return snapshot;
+}
+
 /** Read every stored record and load it into the editor. */
 async function readAll() {
-  if (!device) return;
+  if (!device || rgbBusy) return;
   const btn = $("btnRead");
   btn.disabled = true;
+  let freshDeviceBackup = null;
   try {
     const bound = Object.values(profile.layers).reduce(
       (n, l) => n + Object.values(l.bindings).filter(Boolean).length, 0);
     if (bound && !confirm(
       `Replace the ${bound} binding(s) currently in the editor with what is on the keypad?\n\n` +
-      `Nothing is written to the device. Export first if you want to keep them.`)) {
+      `Nothing is written to the device. Lighting is not read or changed. Export first if you want to keep them.`)) {
       return;
     }
+    if (effDialect() === "ch57x-3") {
+      liveDeviceBackup = null;
+      backupCapturedThisSession = false;
+      applyCaps();
+    }
 
-    const found = await detect();
+    const found = await detect(effDialect() === "ch57x-3");
+    if (effDialect() === "ch57x-3" &&
+        (!device || device.vendorId !== 0x514C || device.productId !== 0x8850 ||
+         !found || found.keys !== 16 || found.knobs !== 3))
+      throw new Error("the 0xFA read is enabled only after this device identifies as the captured XZKJ 16x3 variant");
     // Adopt whatever the device reports, so this works on any model.
     const keys  = found?.keys  ?? layout.keys;
     const knobs = found?.knobs ?? layout.knobs;
@@ -2103,18 +2618,39 @@ async function readAll() {
     const next = await readDeviceProfile(keys, knobs, true);
     const total = next.layers.reduce((n, l) => n + Object.keys(l.bindings).length, 0);
 
+    if (effDialect() === "ch57x-3") {
+      // CH3 starts its encoder slots at 17. Stamp the current base before this
+      // profile can be saved or imported, otherwise a later reconnect would
+      // shift the just-read encoder bindings one slot too far.
+      next.knobBase = knobBase();
+      freshDeviceBackup = makeXzkjBackup(next);
+      next.deviceBackup = JSON.parse(JSON.stringify(freshDeviceBackup));
+      delete next._deviceReadRequests;
+      delete next._deviceReadRecords;
+    }
+
     // Backlight is not reported by 0xFA — keep whatever was set here.
     for (let l = 0; l < N_LAYERS; l++) next.layers[l].led = profile.layers[l].led;
 
     profile = next;
+    if (effDialect() === "ch57x-3") {
+      liveDeviceBackup = freshDeviceBackup;
+      backupCapturedThisSession = true;
+    }
     sel = null;
     saveProfile();
     renderAll();
     log(`Loaded ${total} binding(s) from the keypad.`, "g");
+    if (effDialect() === "ch57x-3") {
+      log("The complete 75-report device snapshot is stored in this profile. Export it if you want a backup.", "w");
+      log("Lighting was not read. The RGB colours and modes shown are only a local draft and may differ from the keypad.", "w");
+    }
+    applyCaps();
   } catch (err) {
     log("Read failed: " + err.message, "e");
   } finally {
-    btn.disabled = !device;
+    btn.disabled = !device || !canReadCurrentLayout();
+    applyCaps();
   }
 }
 
@@ -2154,11 +2690,14 @@ function renderFormatPick() {
     const id = device
       ? `${(device.vendorId||0).toString(16).padStart(4,"0")}:${(device.productId||0).toString(16).padStart(4,"0")}`
       : "unknown";
-    hint.innerHTML =
-      `<b>Command format.</b> Chosen from your keypad's USB id (<code>${id}</code>). ` +
-      `Not every model of these keypads takes the same commands, and for some there is ` +
-      `no way to tell but to try. <b>If your keys do not respond after writing, pick the ` +
-      `other format above and write again.</b>`;
+    hint.innerHTML = isConfirmedXzkj16x3()
+      ? `<b>Command format.</b> This XZKJ 16x3 unit was identified as <code>${id}</code>. ` +
+        `Its read path is confirmed. One key was changed and restored on one unit; ` +
+        `other write cases remain unverified. Keep an exported ` +
+        `backup and use the detected Alternative B format.`
+      : `<b>Command format.</b> Chosen from your keypad's USB id (<code>${id}</code>). ` +
+        `Different models may use different commands. A wrong format can be accepted ` +
+        `without changing the keypad; do not switch formats as a write diagnostic.`;
   }
 }
 
@@ -2182,12 +2721,11 @@ function renderLayoutPick() {
   const sel2 = $("layoutPick");
   sel2.textContent = "";
   let matched = false;
-  // A layout with more keys than the dialect allows is not merely wrong, it is
-  // ambiguous: on a standard pad keySlot(15) and knobSlot(0, "ccw") are both
-  // slot 16, so a 16-key choice makes one binding appear in two places and each
-  // edit overwrite the other. maxKeys is always below the knob base, so this
-  // filter is exactly the no-collision condition.
-  const fits = LAYOUTS.filter(l => l.keys <= effCaps().maxKeys);
+  // Show layouts supported by any protocol so users can choose their model
+  // before connecting. Read/write/repair controls separately require the
+  // selected layout to fit the active protocol and detected device shape.
+  const fits = LAYOUTS.filter(l => Object.values(DIALECT_CAPS)
+    .some(caps => layoutFits(l, caps)));
   for (const l of fits) {
     const label = l.keys
       ? `Model: ${l.keys} keys, ${l.knobs} knob${l.knobs === 1 ? "" : "s"} — ${l.cols}\u00d7${l.rows}`
@@ -2208,7 +2746,7 @@ function renderTabs() {
   const wrap = $("layerTabs");
   wrap.textContent = "";
   for (let l = 0; l < N_LAYERS; l++) {
-    const n = Object.values(profile.layers[l].bindings).filter(Boolean).length;
+    const n = Object.values(profile.layers[l].bindings).filter(b => b && b.type !== "clear").length;
     const b = document.createElement("button");
     b.type = "button";
     b.role = "tab";
@@ -2292,6 +2830,8 @@ function renderKnobs() {
 }
 
 function renderLed() {
+  $("basicLedPanel").classList.toggle("hidden", layout.keys === 16 && layout.knobs === 3 &&
+    (!device || (effDialect() === "ch57x-3" && isConfirmedXzkj16x3())));
   const led = curLayer().led;
   $("ledMode").value = led.mode;
   $("ledColorField").classList.toggle("hidden", led.mode === "off");
@@ -2312,12 +2852,55 @@ function renderLed() {
     sw.append(b);
   }
 
-  $("btnApplyLed").disabled = !device || !verified || !effCaps().led;
+  $("btnApplyLed").disabled = rgbBusy || !device || !verified || !effCaps().led;
   $("clearLayerName").textContent = `layer ${layer + 1}`;
   $("blankLayerName").textContent = `layer ${layer + 1}`;
   const r = ledReports(layer, led)[0];
   $("ledCode").innerHTML = `Layer ${layer + 1} packet: <code>03 ${hex(r.subarray(0, 12))}</code>`;
 
+}
+
+function renderRgb() {
+  const visible = layout.keys === 16 && layout.knobs === 3 &&
+    (!device || (effDialect() === "ch57x-3" && isConfirmedXzkj16x3()));
+  $("xzkjRgbPanel").classList.toggle("hidden", !visible);
+  $("rgbLayerName").textContent = `layer ${layer + 1}`;
+  $("rgbMode").value = String(rgbDraft?.modes?.[layer] ?? 1);
+  $("rgbMode").disabled = rgbBusy || !validRgbDraft(rgbDraft);
+  const grid = $("rgbGrid");
+  grid.textContent = "";
+  const rgbLayout = layout.keys === 16 && layout.knobs === 3 ? layout : findLayout(16, 3);
+  const columns = displayGrid(rgbLayout).cols;
+  grid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+  gridOrder(rgbLayout).forEach(slot => {
+    const i = slot - 1;
+    const label = document.createElement("label");
+    label.className = "rgb-cell";
+    label.textContent = `LED ${slot}`;
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = rgbDraft?.layers?.[layer]?.[i] || "#000000";
+    input.disabled = rgbBusy || !validRgbDraft(rgbDraft);
+    input.setAttribute("aria-label", `Layer ${layer + 1} RGB slot ${slot}`);
+    const draftLayer = layer;
+    input.oninput = e => {
+      if (!rgbBusy && validRgbDraft(rgbDraft) && /^#[0-9a-f]{6}$/i.test(e.target.value)) {
+        rgbDraft.layers[draftLayer][i] = e.target.value;
+        saveRgbDraft();
+      }
+    };
+    label.append(input); grid.append(label);
+  });
+  $("rgbDraftStatus").textContent = validRgbDraft(rgbDraft)
+    ? "LOCAL DRAFT ONLY — these colours and modes were not read from the keypad and may differ from its lighting."
+    : "Lighting was not read. Choose a starting colour and fill all layers to create a local draft.";
+  $("btnRgbFill").disabled = rgbBusy;
+  $("btnRgbExport").disabled = rgbBusy || !validRgbDraft(rgbDraft);
+  $("btnRgbImport").disabled = rgbBusy;
+  $("btnRgbApply").disabled = rgbBusy || $("btnRead").disabled || $("btnWrite").disabled ||
+    !isConfirmedXzkj16x3() || !verified ||
+    effDialect() !== "ch57x-3" || !validRgbDraft(rgbDraft) || !canWriteCurrentLayout() ||
+    framing.id !== 3 || framing.len !== 64 || framing.prefix !== null || !!framing.none;
 }
 
 /* ==================================================================
@@ -2371,7 +2954,9 @@ function renderEditor() {
   if (b?._raw) {
     const p = document.createElement("p");
     p.className = "hint";
-    p.innerHTML = `<span style="color:var(--ok)">Read from the keypad.</span> Written back byte for byte unless you change it.`;
+    p.innerHTML = effDialect() === "ch57x-3"
+      ? `<span style="color:var(--ok)">Read from the keypad.</span> The full raw reply is kept in the backup; writing this binding re-encodes it.`
+      : `<span style="color:var(--ok)">Read from the keypad.</span> Written back byte for byte unless you change it.`;
     host.append(p);
   }
   if (type === "raw") {
@@ -2525,6 +3110,12 @@ function renderKeyEditor(host, b) {
   selKey.append(new Option("— modifiers only —", "0"));
   for (const k of KEYS) selKey.append(new Option(k.name, String(k.code)));
   keyField.append(selKey);
+  if (effDialect() === "ch57x-3") {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "A standalone Shift matches a working vendor-configured mapping. Writing it with this app has not yet been verified on hardware.";
+    keyField.append(hint);
+  }
   const addBtn = document.createElement("button");
   addBtn.type = "button";
   addBtn.textContent = "Add step";
@@ -2712,14 +3303,34 @@ window.addEventListener("keydown", e => {
    Import / export
    ================================================================== */
 function exportProfile() {
+  const isDeviceBackup = backupCapturedThisSession && isConfirmedXzkj16x3() &&
+    isCompleteCh3Backup(liveDeviceBackup) &&
+    profileMatchesCh3Backup(profile, liveDeviceBackup);
   const clean = JSON.parse(JSON.stringify(profile, (k, v) => (k === "_mods" ? undefined : v)));
+  // Only a profile that still matches the live read is named as a device
+  // backup and paired with the current-session snapshot.
+  if (isDeviceBackup) clean.deviceBackup = JSON.parse(JSON.stringify(liveDeviceBackup));
   const blob = new Blob([JSON.stringify(clean, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "keypad-profile.json";
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = isDeviceBackup ? `macropad-backup-514c-8850-${stamp}.json` : "keypad-profile.json";
   a.click();
-  URL.revokeObjectURL(a.href);
-  log("Profile exported.", "g");
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log(isDeviceBackup ? "Current-device binding backup exported." : "Profile exported.", "g");
+}
+
+function exportPrewriteBackup() {
+  if (!prewriteBackup) return;
+  const blob = new Blob([JSON.stringify(prewriteBackup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `macropad-prewrite-514c-8850-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log("Pre-write binding snapshot exported. Lighting is not included.", "g");
 }
 
 $("fileImport").onchange = async e => {
@@ -2728,15 +3339,45 @@ $("fileImport").onchange = async e => {
   try {
     const p = JSON.parse(await file.text());
     if (!p || !Array.isArray(p.layers) || p.layers.length !== N_LAYERS) throw new Error("not a keypad profile");
+    const keptFreshBackup = effDialect() === "ch57x-3" && backupCapturedThisSession &&
+      isCompleteCh3Backup(liveDeviceBackup);
     profile = p;
+    // Keep the separate current-device snapshot when importing an editor target.
+    if (effDialect() !== "ch57x-3") {
+      backupCapturedThisSession = false;
+    }
     for (const l of profile.layers) {
       l.bindings ||= {};
       l.led ||= { mode: "backlight", color: 1 };
     }
+    // Older backups can contain raw records that the newer decoder recognizes.
+    // Promote only complete replies for the matching slot and layer; leave
+    // unrecognized records opaque and keep every original byte in _raw.
+    if (effDialect() === "ch57x-3") for (let l = 0; l < N_LAYERS; l++) {
+      for (const [slot, b] of Object.entries(profile.layers[l].bindings)) {
+        const raw = b?.type === "raw" && Array.isArray(b.raw) ? b.raw : null;
+        if (raw?.length !== 64 || raw[0] !== 0xFA || raw[1] !== Number(slot) || raw[2] !== l + 1) continue;
+        const singleMod = raw[3] === TYPE_KEYBOARD && raw[5] === 1 &&
+          raw[6] === 0 && raw[7] === 0 && raw[8] >= 0xF1 && raw[8] <= 0xF8;
+        if (singleMod || raw[3] === TYPE_MEDIA || raw[3] === TYPE_MOUSE) {
+          const decoded = decodeCh3Record(raw);
+          if (decoded && decoded.type !== "raw") profile.layers[l].bindings[slot] = decoded;
+        }
+      }
+    }
     sel = null;
     saveProfile();
+    applyCaps();
     renderAll();
-    log("Profile imported — nothing sent yet. Press Write to apply.", "g");
+    if (effDialect() === "ch57x-3") {
+      log("Profile imported into the editor — nothing was sent to the keypad.", "g");
+      if (keptFreshBackup)
+        log("The current-device snapshot is still available in this session. Review the device diff before writing.", "w");
+      else
+        log("The app will read current bindings and show a diff before writing.", "w");
+    } else {
+      log("Profile imported — nothing sent yet. Press Write to apply.", "g");
+    }
   } catch (err) {
     log("Import failed: " + err.message, "e");
   }
@@ -2748,7 +3389,7 @@ $("fileImport").onchange = async e => {
    ================================================================== */
 function renderAll() {
   renderLayoutPick(); renderFormatPick(); renderOrientPick(); renderTabs(); renderGrid();
-  renderKnobs(); renderLed(); renderEditor();
+  renderKnobs(); renderLed(); renderRgb(); renderEditor();
 }
 
 $("btnConnect").onclick = () => connect(false);
@@ -2762,15 +3403,22 @@ $("btnBlank").onclick = blankKeypad;
 $("btnApplyLed").onclick = applyLed;
 $("btnRepair").onclick = repairIdentity;
 $("formatPick").onchange = e => {
+  if (isConfirmedXzkj16x3() && e.target.value && e.target.value !== "ch57x-3") {
+    e.target.value = forcedDialect || "";
+    log("This identified XZKJ 16x3 unit is locked to its confirmed Alternative B format; the incompatible override was rejected.", "e");
+    return;
+  }
   forcedDialect = e.target.value || null;
   const eff = effDialect();
   log(forcedDialect
-    ? `Now sending the "${dialectName(forcedDialect)}" command format (${forcedDialect}). ` +
-      `Write again and try your keys.`
+    ? `Selected the "${dialectName(forcedDialect)}" command format (${forcedDialect}). ` +
+      `Read-back and writes depend on this device supporting that format.`
     : `Back to the automatic choice, "${dialectName(dialect)}".`, "w");
   const caps = DIALECT_CAPS[eff];
   if (caps && !caps.tested)
-    log(`This format has never been tested on real hardware — writing is at your own risk.`, "w");
+    log(eff === "ch57x-3"
+      ? `One key was changed and restored on one XZKJ unit; other write cases remain unverified.`
+      : `This format has never been tested on real hardware — writing is at your own risk.`, "w");
   // Formats disagree about where knob slots begin, so the editor's slots move.
   alignKnobBase();
   applyCaps();
@@ -2789,16 +3437,62 @@ $("layoutPick").onchange = e => {
   if (!l) return;
   setLayout(l);
   sel = null;
+  applyCaps();
   renderAll();
   log(`Layout set to ${l.keys} keys, ${l.knobs} knobs (${l.cols}\u00d7${l.rows}).`);
 };
 $("btnImport").onclick = () => $("fileImport").click();
+$("btnExportPrewrite").onclick = exportPrewriteBackup;
 $("btnClearLog").onclick = () => { logEl.textContent = "Cleared."; };
 $("btnClearBinding").onclick = () => {
   if (!sel) return;
-  delete curLayer().bindings[sel.slot];
+  if ((effDialect() === "ch57x-3" && isConfirmedXzkj16x3()) ||
+      (!device && layout.keys === 16 && layout.knobs === 3))
+    curLayer().bindings[sel.slot] = { type: "clear" };
+  else
+    delete curLayer().bindings[sel.slot];
   saveProfile();
   renderAll();
+};
+$("btnRgbFill").onclick = () => {
+  if (rgbBusy) return;
+  const color = $("rgbFillColor").value;
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+  if (rgbDraft && !confirm("Replace the RGB draft for all three layers with this colour? This changes the draft only.")) return;
+  rgbDraft = { layers: Array.from({ length: 3 }, () => Array(16).fill(color)), modes: rgbDraft?.modes?.slice() ?? [1,1,1] };
+  saveRgbDraft(); renderRgb();
+};
+$("rgbMode").onchange = e => {
+  const mode = Number(e.target.value);
+  if (!rgbBusy && validRgbDraft(rgbDraft) && Number.isInteger(mode) && mode >= 0 && mode <= 5) {
+    rgbDraft.modes[layer] = mode;
+    saveRgbDraft();
+  }
+};
+$("btnRgbApply").onclick = applyXzkjRgb;
+$("btnRgbExport").onclick = () => {
+  if (!validRgbDraft(rgbDraft) || rgbBusy) return;
+  const file = { format: "macropad-rebind-xzkj-rgb-draft", version: 2, layers: rgbDraft.layers, modes: rgbDraft.modes };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a"); a.href = url; a.download = "xzkj-rgb-draft.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log("RGB draft exported. It is a design, not a readback of device lighting.");
+};
+$("btnRgbImport").onclick = () => { if (!rgbBusy) $("rgbImportFile").click(); };
+$("rgbImportFile").onchange = async e => {
+  const file = e.target.files?.[0];
+  if (!file || rgbBusy) return;
+  try {
+    const draft = JSON.parse(await file.text());
+    const normalized = normalizeRgbDraft(draft);
+    if (draft.format !== "macropad-rebind-xzkj-rgb-draft" || ![1,2].includes(draft.version) || !normalized || (draft.version === 2 && !Array.isArray(draft.modes)))
+      throw new Error("not a valid 3-layer XZKJ RGB draft");
+    if (rgbDraft && !confirm("Replace the current RGB draft with the imported draft? This does not write to the keypad.")) return;
+    rgbDraft = { layers: normalized.layers.map(colors => [...colors]), modes: [...normalized.modes] };
+    saveRgbDraft(); renderRgb();
+    log("RGB draft imported; nothing sent to the keypad.");
+  } catch (err) { log("RGB draft import failed: " + err.message, "e"); }
+  finally { e.target.value = ""; }
 };
 $("ledMode").onchange = e => {
   const led = curLayer().led;

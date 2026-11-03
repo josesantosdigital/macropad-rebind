@@ -66,7 +66,7 @@ vendor or product id alone:
 |---|---|---|---|---|
 | **ch57x-1** | Standard | `1189:8840`, `1189:8842`, `1189:8850`, `514c:8851`, and `514c:8850` on a 12-key, 4-knob unit (see below) | `0xFE` | yes |
 | ch57x-2 | Alternative A | `1189:8890` | different framing | key bindings, one pad ([#4](https://github.com/jvspier/macropad-rebind/issues/4)) |
-| ch57x-3 | Alternative B | `514c:8850`, on units that do not answer `0xFB` | `0xFD` | no |
+| ch57x-3 | Alternative B | `514c:8850`, including XZKJ 16-key/3-knob units | `0xFD` | read captured on XZKJ 16x3; same-board write reported |
 | lctech | Alternative C | `1189:8890` reporting as **"LCKEY"** | one report per binding | no |
 
 Note that **`1189:8850` and `514c:8850` share a product id and differ** — so any
@@ -90,7 +90,7 @@ The mapping comes from
 [ch57x-keyboard-tool](https://github.com/kriomant/ch57x-keyboard-tool)'s
 `SUPPORTED_DEVICES` table, which has separate implementations per dialect.
 
-### `514c:8850` is at least two different keypads
+### `514c:8850` identifies at least two different keypads
 
 That table files `514c:8850` under ch57x-3, and for the 4x4 pads it was written
 for that is presumably right. It is not right for every unit with that id. A
@@ -112,24 +112,70 @@ knobs.
 
 An id table cannot tell the two kinds of `514c:8850` apart, so the app asks. For
 an id filed under ch57x-3 it sends `0xFB`, which is a read and changes nothing.
-If the reply begins with `0xFB` and
-gives a layout the Standard format can address — at most 15 keys and 4 knobs, at
-least one of either — the keypad is treated as Standard for that connection. A
-keypad that stays silent, or answers with anything else, keeps the format its id
-says. No other format is asked: `1189:8890` has key bindings confirmed under
-ch57x-2 and a disputed format already, so it is left as it is, and LCTECH's
-expects nothing but its own reports.
+If the reply begins with `0xFB` and gives a layout the Standard format can
+address — at most 15 keys and 4 knobs, at least one of either — the keypad is
+treated as Standard for that connection. A keypad that stays silent, or answers
+with anything else, keeps the format its id says. One other `514c:8850` variant
+is the XZKJ `@XZKJ-16key_3knob`: it reports `FB 10 03 0B` (16 keys, 3 knobs), so
+it cannot be treated as Standard. The vendor app's **View settings** exchange
+was captured on one such unit: it sent three `FA 19 00 <layer> 00` queries and
+received 25 `0xFA` records for each layer. No write, reset, or firmware-update
+report appeared in that exchange. The reader is deliberately enabled only for a
+connected `514c:8850` that answers `0xFB` with exactly this layout.
 
-A real ch57x-3 pad is expected to stay silent, which is what keeps this safe,
-but nobody here has one to confirm it. If you have one, the log line "Reply does
-not begin with 0xFB" or "No reply" on connect is the thing to report.
+The vendor application's trailing query bytes are opaque and nonzero. This app
+uses the captured five-byte header with a zero-filled tail; that exact request
+form was sent to one matching unit, and all 75 replies were unique and matched
+the vendor capture. This confirms it for that unit, not every device reusing the
+USB id. No other format is asked: `1189:8890` has key bindings confirmed under
+ch57x-2 and a disputed format already, so it is left as it is, and LCTECH expects
+nothing but its own reports.
 
 ### ch57x-3 (514C:8850)
 
-Ported here from ch57x-keyboard-tool's `k8850_4x4.rs` and **not verified against
-hardware** — nobody working on this has a unit that speaks it. (The one
-`514c:8850` pad that was tried speaks the Standard format; see above.) Payload offsets below exclude the
-report id, as elsewhere.
+The vendor-app capture for this unit is read-only: it establishes the `0xFA`
+read exchange, not the `0xFD` write path. The write format comes from
+ch57x-keyboard-tool issue
+[#153](https://github.com/kriomant/ch57x-keyboard-tool/issues/153), where the
+researcher captured the same `@XZKJ-16key_3knob` PCB and documented the `0xFD`
+record header, modifier and delay encoding, and batch terminator. A later user
+reported successfully configuring a matching pad with that branch. The
+[related implementation](https://raw.githubusercontent.com/yawor/ch57x-keyboard-tool/k8850_4x4/src/keyboard/k8850_4x4.rs)
+encodes the same record fields, but sends `FD FE FF` after each binding. The
+issue author reports that the vendor app sends one terminator after all binding
+records; this app follows that observed batch behavior. Both patterns have
+related-board evidence. This browser app's writer completed one A-to-B change
+and readback on the user's unit, followed by a B-to-A restore and full readback.
+The decoded key binding returned to A and every other raw slot response matched
+the original backup. In the restored slot's raw response, byte 4 changed from
+`01` to `00`; its meaning is unknown, so the result confirms the mapping but
+not byte-for-byte restoration of that record. Other write types, multi-key
+batches, and other firmware revisions remain unverified. Payload offsets below
+exclude the report id, as elsewhere.
+
+A later, temporary modifier-only test wrote the ch57x-3 keyboard sequence
+`FD 05 01 01 00 02 00 00 F2 00 00 00` to L1 slot 5 (K14): Left Shift followed
+by a zero-key step. Readback stored that sequence, and the other 74 raw reports
+were unchanged. The user then reported no Shift effect while holding K14; the
+active hardware layer during that keypress was not independently confirmed.
+K14 was restored to its pre-test unbound state, and a fresh 75-report capture
+matched the pre-test snapshot byte-for-byte. This confirms storage and readback
+of the modifier-only record, but leaves its runtime hold behavior unresolved.
+It does not establish simultaneous physical-key rollover.
+
+The user subsequently configured K14 as Shift with the original Windows
+software and reported that it works while other keys are held. A read-only
+capture showed L1 slot 5 as `FA 05 01 01 00 01 00 00 F2` followed by nonzero
+bytes, including repeated `00 32 00` values after the declared single entry.
+The other 74 raw replies were identical to the preceding snapshot. The fork
+now decodes the one-token modifier as a modifier-only step and encodes such a
+step with one modifier entry instead of appending a zero key. The vendor's
+outbound write was not captured, and the trailing bytes' meaning is unknown;
+the fork's zero-padded write is inferred and remains unverified on hardware.
+Backups retain the full 64-byte reply, including its trailing bytes.
+The same single-token encoding for other individual modifier keys is an
+inference from the documented `F1`–`F8` token mapping; only Left Shift was
+reported working in this test.
 
     [0]     0xFD          write
     [1]     slot id       1..16 keys, 17.. knob actions
@@ -148,16 +194,137 @@ costs two entries, and the 18-entry ceiling counts them.
 `[7]` button bitmap, `[10]` dx, `[13]` dy, `[16]` wheel delta. **Drag is not
 supported.**
 
-Each binding is followed by a single `FD FE FF` terminator — no `AA AA`
-separators.
+For captured XZKJ `0xFA` replies, the media record has type `02`, flag `01`,
+count `02`, and its consumer-usage bytes at payload offsets 8 and 11. For
+example, play/pause returned `FA 15 01 02 01 02 00 00 CD 00 00 00`. A captured
+left-click record returned `FA 12 01 03 01 04 00 00 00 00 00 01`. The reader
+decodes recognized media usages and representable mouse actions; unsupported
+usages, combinations, or unexpected extra fields remain opaque. The full
+64-byte reply is retained in the binding backup either way. The mouse wheel
+and movement field interpretation follows the existing writer and has not been
+independently confirmed against a device read capture.
 
-Two capabilities are simply absent: **no LED command is known**, and **no read
-command is known**. So on this dialect there is no read-back, which means no
-diff before writing and no verification after it. A writer should say so rather
-than imply the same confidence it has on ch57x-1.
+The issue report says the vendor app stages binding records and sends one
+`FD FE FF` terminator after the records. The Rebind writer sends only changed
+records and one commit, rather than the per-binding terminator used by the
+related Rust branch. A write updates stored configuration mappings; it is not
+a firmware or bootloader operation. No software protocol can guarantee that a
+malformed configuration write will always recover cleanly, so retain the
+exported raw backup and keep the vendor software available.
+
+**Read, XZKJ 16x3 only.** The vendor query payload begins
+`FA 19 00 <layer> 00`; `0x19` requests 25 slots and the layer is 1-based. A reply
+begins `FA <slot> <layer> <type> <header> <count>`. For captured type-1 keyboard
+records, each entry is `[delay-ms high, delay-ms low, HID usage]`. The captured
+device returned 75 replies, all with one keyboard entry; the usages were `A`
+through `Y`. Slot ids 1–16 are keys; 17–25 are the three encoder actions (ccw,
+press, cw), matching the vendor UI and public report. This read path is
+established by a vendor-app capture on one unit, not by arbitrary devices with
+the same VID:PID. The exact five-byte query was also sent with a zero-filled
+tail on that unit; all three requests returned 25 unique reports, byte-for-byte
+matching the vendor capture. This validates the request form used here for this
+unit only.
+
+The app checks for 25 unique slot replies on every layer and refuses to replace
+the editor if any are missing or duplicated. Its JSON export stores decoded
+bindings and all 75 raw 64-byte reply payloads in
+`deviceBackup.responseReports`, plus the three zero-padded query payloads in
+`deviceBackup.queryReports`. The backup records key slots 1–16 in the observed
+physical order: column-major, bottom-to-top (slot 1 is bottom-left; the top row
+is slots 4, 8, 12, 16). Encoder action slots 17–25 follow in ccw/press/cw order.
+Older exports may still say `row-major` in this metadata; their raw slot records
+remain usable. Unknown record types
+or sequences the editor cannot faithfully express remain recoverable from the
+raw replies. This is a complete
+binding-report snapshot, **not** proof that LED, wireless, or other global
+settings are readable. The app has a separate, experimental RGB editor for
+this variant; it does not read back the device's lighting.
+
+**Per-key RGB research.** An open [K8850 LED pull request](https://github.com/kriomant/ch57x-keyboard-tool/pull/175)
+reports testing per-key RGB on the same `@XZKJ-16key_3knob` PCB family using an
+`FE B0` record. A second tester
+reported two positions lighting together, one RGB slot with no visible effect,
+and intermittent LED freezes requiring a reconnect. The pull request's stated
+behavior for omitted layers differs from its implementation: its
+[`set_led_config` code](https://raw.githubusercontent.com/skarard/ch57x-keyboard-tool/feat/k8850-led-config/src/keyboard/k8850.rs)
+sends an all-off record for each unspecified layer. Those details have not been
+verified on this unit. Its current lighting state is not included in the known
+75-binding backup. The editor builds three explicit lighting drafts, requires
+a separate user confirmation, and captures all 75 binding replies immediately
+before sending. It now sends the three lighting packets consecutively, as seen
+in the vendor capture, and compares the 75 bindings afterward. This means an
+unexpected binding change cannot be detected until all three packets are sent.
+It does not automatically restore mappings.
+This detects unexpected binding changes; it cannot guarantee their absence or
+recover the previous lighting. The owner subsequently reported that the fork's
+RGB controls did not apply the requested colours and that lighting stopped
+responding until a full power cycle. MINI_KEYBOARD lighting then responded again.
+The cause is unknown; see the later successful single-color test below.
+
+In a controlled capture on this unit, choosing red for vendor UI key 1 in
+LED Mode 2 and saving produced three reports: report ID 3, then
+`FE B0 <layer 0..2> <mode>`, followed by exactly 16 RGB triplets and zero
+padding to 64 data bytes. The three captured modes were 2, 0 and 0. The first
+triplet was red, and the owner confirmed that key turned red on press after
+power-cycling. The captured save sent all three layer records, even though one
+key was edited. The fork previously inserted a duplicate first triplet; its
+encoder now matches the captured packet. The owner reported that a fork upload
+did not take effect after a power cycle. That fork version inserted binding reads
+between lighting packets. The vendor's three reports appeared consecutively
+within about 3.3 ms, so the fork now follows that order. Whether the intervening
+reads caused the failure remains a hypothesis. After the consecutive sequence
+was applied with the first RGB slot changed from red to magenta, the owner
+reported it worked. The owner describes the modes as 0 off, 1 static,
+2 reactive for the pressed key, 3 ripple on keypress, 4 column wave, and 5 row
+wave; only mode 2 was exercised in this capture. The owner
+reported that the RGB grid needs the same orientation as the key grid: in normal
+orientation slot 1 is bottom-left and slot 13 bottom-right. The editor now
+displays device slots in that order; changing orientation is display-only.
+
+The vendor-app identification reply saved before lighting changes contained
+nonzero RGB-like bytes. The reply was unchanged immediately after the save and
+became zero-filled after the device was power-cycled, even though the owner
+reported the new red lighting working. It therefore cannot be treated as
+reliable stored-lighting readback. The read-only helper retains the raw reply
+for further investigation, but its 75-binding snapshot is not a lighting backup.
+
+For this variant the app enables writing after the device and 16x3 layout are
+identified, without requiring a manual backup export. On write, it reads all
+75 current records, retains an optional in-memory pre-write backup, presents a
+diff, sends only changed bindings, sends one terminator, and reads back to verify.
+The snapshot can be downloaded with **Export pre-write backup** until the page
+closes or another pre-write snapshot replaces it. A single keyboard binding was
+verified on the user's XZKJ unit; see the write-evidence note above. A slot absent from
+the editor is skipped, preserving partial profiles. The Clear button marks an
+explicit clear in the profile; the diff lists it as unbound and the writer
+sends a type-1 count-0 record. That record restored L1 slot 5 to unbound on this
+unit; clearing other slots and layers is inferred from the same format. The
+app reads back and reports a failure if the slot remains bound.
+
+To restore an older profile, connect, import it as the editor target, and review
+the device diff before writing. The automatic current-device snapshot is held
+separately from the imported profile and may be exported if desired. Imported
+files do not substitute for the automatic pre-write device read.
+
+The exported backup can be checked offline, without a connected keypad:
+
+```powershell
+pwsh -NoProfile -File .\tools\validate_rebind_backup.ps1 `
+  -Path .\macropad-backup-514c-8850-2026-11-03T17-30-00-000Z.json
+```
+
+The validator checks the device/layout metadata, all three requests, all 75
+unique raw replies, and that each decoded binding's raw bytes match its captured
+reply. It does not open HID devices or make any changes. It accepts the browser
+app's versioned `deviceBackup` JSON; the separate capture-based backup under the
+workspace uses a different schema.
 
 Slot numbering differs too — 16 keys rather than 15, so knob actions begin at
-slot **17**, not 16.
+slot **17**, not 16. On the tested unit the physical key grid is column-major,
+bottom-to-top: slot 1 is bottom-left, slot 4 top-left, slot 13 bottom-right,
+and slot 16 top-right. The one-key change check showed the temporary B mapping
+in physical rows `D H L P / C G K O / B F J N / B E I M`. After restoring slot
+1 to A, readback showed `D H L P / C G K O / B F J N / A E I M`.
 
 ### ch57x-2 (1189:8890)
 
@@ -314,9 +481,17 @@ useful part — **neither build supports vendor `0x514C` at all.** The vendor
 software handles all of its devices through one code path, which is good evidence
 that every `1189:88xx` product above speaks ch57x-1.
 
-It also means the vendor application cannot be a source for the ch57x-3 dialect.
-`514C` devices ship with different software, and the only public description of
-that dialect is ch57x-keyboard-tool's implementation.
+Those examined `1189` vendor builds cannot be a source for ch57x-3. The separate
+`MINI_KEYBOARD` software supplied for the `514C` XZKJ unit does expose a read
+path; its captured `0xFA` exchange is described in the ch57x-3 section above.
+
+Static inspection of the supplied `MINI_KEYBOARD.exe` identifies a 32-bit native
+Qt 5 application using hidapi. Its embedded strings include
+`Read_configuration_clicked`, `SendLayer`, `hid_read`, `hid_write`, and
+`Saved successfully`, consistent with separate read and write code paths. These
+names alone do not establish which reports are sent or their safety. The actual
+View settings capture confirms the read path; that capture contains no write
+reports.
 
 ## Commands
 
