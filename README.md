@@ -33,12 +33,6 @@ in a Chromium-based browser. You can also run it locally with
 `node tools/serve-local.mjs`. The [original hosted app](https://jvspier.github.io/macropad-rebind/)
 is maintained by upstream and does not include this fork's changes.
 
-<p align="center">
-  <img src="images/screenshot.png"
-       alt="Macropad Rebind: the on-screen keypad with two knobs and twelve keys, a binding editor, backlight controls and a device log"
-       width="720">
-</p>
-
 The upstream app supports several other small macropads sold under many names.
 Its single HTML page uses WebHID in a compatible Chromium-based browser. The
 XZKJ read protocol in this fork was identified by observing the manufacturer's
@@ -124,7 +118,7 @@ Recognized XZKJ media keys and mouse actions are decoded on readback so they
 appear as their actual bindings in the editor and write preview. The original
 raw reply is retained; records the editor cannot represent remain opaque.
 
-The XZKJ **RGB draft** editor keeps its draft separately from key bindings.
+The XZKJ **Lighting** view keeps its RGB draft separately from key bindings.
 Choose a starting colour and **Fill all layers**, then use the layer tabs and
 16 colour selectors to edit each layer. Choose from off, static, reactive,
 ripple, column wave and row wave modes. The draft can be exported/imported as
@@ -283,9 +277,11 @@ nothing tells you why.
    enables the controls that write once it gets a sensible answer. The picker
    filter is a convenience, not a guarantee — other hardware exposes a vendor HID
    interface too, and writing to one of those could misconfigure it.
-2. Click **Read from keypad** to pull in what is currently programmed.
-3. Click a key or knob action, and bind it.
-4. Click **Write to keypad**. It reads the device first and shows a diff — what
+2. If supported, click **Read from keypad** to pull in what is currently
+   programmed, then use **Backups → Export current profile** to save a copy.
+3. In **Mappings**, choose a layer, then click a key or knob action to edit it.
+   The tabs change the layer being edited; switch the active layer on the pad.
+4. Click **Write to keypad**. On devices with readback, it reads first and shows a diff — what
    is on each key now and what it will become — then reads back afterwards and
    confirms every binding actually stored. A write returning no error is not the
    same as the device having kept it.
@@ -362,15 +358,17 @@ and not edited is written back exactly as it came, so parts of the format this
 tool doesn't fully decode survive a round trip.
 
 **Export your config.** Bindings persist in the browser's `localStorage`, which
-is a convenience, not a backup. **Export** writes a JSON file you can keep or
-re-import.
+is a convenience, not a backup. **Backups → Export current profile** writes a
+JSON file you can keep or re-import. Browser storage is separate for each site,
+so a profile saved on localhost does not automatically appear on GitHub Pages.
 
 > ⚠️ **Exported profiles contain whatever your macros type.** If a key types a
 > password, it is in that file in plain text. The same is true of the keypad
 > itself — anything that can open the device can read your macros back.
 
 **If only some keys work or light up**, the keypad has been told it is a
-different model. Press **Repair device identity**. Your bindings are unaffected.
+different model. **Device tools** contains the **Repair identity** action.
+Your bindings are unaffected.
 [docs/PROTOCOL.md](docs/PROTOCOL.md) explains the cause.
 
 ---

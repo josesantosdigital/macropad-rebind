@@ -35,7 +35,9 @@ const mkEl = () => {
                  add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); },
                  contains(c) { return this._s.has(c); } },
     append(...k) { t.children.push(...k); }, appendChild(k) { t.children.push(k); return k; },
-    addEventListener() {}, setAttribute() {}, getAttribute() { return null; },
+    attributes: {},
+    addEventListener() {}, setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return this.attributes[name] ?? null; },
     focus() {}, click() {}, remove() {}, showModal() { t._open = true; }, close() { t._open = false; },
   };
   // Assigning textContent or innerHTML replaces everything inside the node.
@@ -214,7 +216,7 @@ const app = new Function(
            "posOfSlot, disconnected, LAYOUTS, effDialect, loadLayout, " +
            "setForced: d => { forcedDialect = d; }, setLayout, " +
            "profile: () => profile, setProfile: p => { profile = p; }, prewriteBackup: () => prewriteBackup, " +
-           "layoutOf: () => layout, dialectOf: () => dialect, $ };"
+           "layoutOf: () => layout, dialectOf: () => dialect, log, $ };"
 )(document, navigator, windowStub, ls, Option, () => confirmResult, () => {}, class {}, { createObjectURL: () => "", revokeObjectURL() {} });
 
 console.log("\nscript loads and renders without throwing");
@@ -245,6 +247,23 @@ eq("connect enabled Blank",  app.$("btnBlank").disabled, false);
 eq("connect enabled Repair", app.$("btnRepair").disabled, false);
 eq("dialect detected",       app.dialectOf(), "ch57x-1");
 eq("layout adopted from the device", `${app.layoutOf().keys}/${app.layoutOf().knobs}`, "12/2");
+
+console.log("\nworkspace navigation is local and keyboard accessible");
+const reportsBeforeNavigation = device.sent.length;
+app.$("viewLighting").onclick();
+eq("lighting view is selected", app.$("app").dataset.view, "lighting");
+eq("lighting tab announces selection", app.$("viewLighting").getAttribute("aria-selected"), "true");
+eq("mappings tab is removed from tab order", app.$("viewMappings").tabIndex, -1);
+let defaultPrevented = false;
+app.$("viewLighting").onkeydown({ key: "ArrowLeft", preventDefault() { defaultPrevented = true; } });
+eq("arrow key returns to mappings", app.$("app").dataset.view, "mappings");
+eq("arrow key prevents page scrolling", defaultPrevented, true);
+eq("switching views sends no device reports", device.sent.length, reportsBeforeNavigation);
+app.log("A problem occurred", "e");
+app.log("Additional context", "w");
+eq("an error remains visible after later warnings", app.$("activityError").textContent, "A problem occurred");
+eq("the most recent status is visible", app.$("activityStatus").textContent, "Additional context");
+app.$("activityError").textContent = "";
 
 console.log("\nread from keypad");
 await app.readAll();
