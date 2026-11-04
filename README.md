@@ -284,6 +284,12 @@ nothing tells you why.
    programmed, then use **Profiles → Export profile** to save a copy.
 3. In **Mappings**, choose a layer, then click a key or knob action to edit it.
    The tabs change the layer being edited; switch the active layer on the pad.
+   Drag a configured key or knob action onto another control to duplicate it.
+   You can also select an action, choose **Copy**, select a destination (even
+   on another layer), and choose **Paste**. Replacing an existing action asks
+   for confirmation; all copies stay local until you write. Unrecognised raw
+   records cannot be copied because their encoding is not understood. Copied
+   device-read actions are re-encoded for their new destination.
 4. Click **Write mappings**. On devices with readback, it reads first and shows a diff — what
    is on each key now and what it will become — then reads back afterwards and
    confirms every binding actually stored. A write returning no error is not the

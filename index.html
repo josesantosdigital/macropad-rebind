@@ -17,6 +17,7 @@ main{max-width:1600px;margin:auto;padding:0 28px 30px}.workspace-header{min-heig
 .lighting-workspace{max-width:850px}.section-heading{padding:17px 20px}.section-heading h2{font-size:14px}.section-heading p{margin-top:4px}.tag{font-size:10px;font-weight:700;padding:4px 8px;border-radius:5px;background:var(--warn-soft);color:var(--warn)}.notice{padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:5px;background:var(--warn-soft);color:var(--ink-2);font-size:11px;line-height:1.55}.notice strong{color:var(--ink)}.rgb-controls{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:14px}.fill-control{display:flex;gap:8px;align-items:end}.fill-control .field{flex:1}.fill-control input[type=color]{width:100%;height:33px;padding:3px;border:1px solid var(--line);background:var(--panel);border-radius:5px}.rgb-heading{display:flex;justify-content:space-between;gap:10px;font-size:11px}.rgb-heading span{color:var(--dim)}.rgb-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;max-width:530px}.rgb-cell{display:flex;flex-direction:column;gap:5px;font:10px var(--mono);color:var(--ink-2)}.rgb-cell input[type=color]{width:100%;height:44px;padding:3px;background:var(--panel);border:1px solid var(--line);border-radius:5px;cursor:pointer}.rgb-actions .primary{margin-left:auto}.swatches{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:5px}.swatch{aspect-ratio:1;padding:0;min-height:0}.swatch[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:2px}.inline-details summary{font-size:11px;color:var(--ink-2)}
 .page-view{max-width:900px}.page-intro{padding:2px 0 20px}.page-intro h2{font-size:15px}.page-intro p{color:var(--ink-2);font-size:12px;margin-top:5px}.profile-row,.setting-row,.tool-action{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 0;border-top:1px solid var(--line)}.profile-row strong,.setting-row strong,.tool-action strong{font-size:12px}.profile-row p,.setting-row p,.tool-action p{color:var(--ink-2);font-size:11px;margin-top:4px}.profile-row button,.tool-action button{flex:none}.setting-row select{width:auto;min-width:230px;max-width:100%}.profile-notice{margin-top:18px}.advanced{border-top:1px solid var(--line)}.advanced>summary{display:flex;justify-content:space-between;align-items:center;list-style:none;padding:17px 0}.advanced summary::-webkit-details-marker{display:none}.advanced summary strong,.advanced summary small{display:block}.advanced summary small{color:var(--ink-2);margin-top:4px}.advanced-body{padding:0 0 22px;display:flex;flex-direction:column;gap:12px}.format-options:not(:has(#formatWrap:not(.hidden))){display:none}.format-options select{width:auto;max-width:100%}.format-options .hint{margin-top:8px}.log-header{display:flex;justify-content:space-between;align-items:center;font-size:11px}.log{background:#20232a;border:1px solid #343944;color:#d7dce5;padding:12px;border-radius:6px;font:10px/1.65 var(--mono);max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.log .t{color:#a4acb9}.log .w{color:#efd09b}.log .e{color:#ffaba6}.log .g{color:#a2dfbf}.recovery{padding-top:24px}.recovery h2{font-size:14px;margin-bottom:10px}
 .key-advanced{border-top:1px solid var(--line-soft);padding-top:12px}.key-advanced summary{font-size:11px;font-weight:600;color:var(--ink-2)}.key-advanced>div{margin-top:14px}
+.editor-actions{display:flex;align-items:center;gap:3px}.copy-feedback{padding:0 18px 12px;color:var(--ink-2);font-size:11px}.copy-feedback:empty{display:none}.keycap[draggable=true],.knob-act[draggable=true],.knob-dial[draggable=true]{cursor:grab}.keycap.drag-source,.knob-act.drag-source,.knob-dial.drag-source{opacity:.55}.keycap.drop-target,.knob-act.drop-target,.knob-dial.drop-target{outline:2px solid #c3bcff;outline-offset:2px;background:#766fc0!important;color:#fff!important}
 .device-info{display:grid;grid-template-columns:120px minmax(0,1fr);gap:7px 14px;margin:0;font-size:11px}.device-info dt{color:var(--dim)}.device-info dd{margin:0;color:var(--ink);overflow-wrap:anywhere}
 #app[data-view=mappings] #lightingView,#app[data-view=mappings] #profilesView,#app[data-view=mappings] #settingsView,#app[data-view=lighting] #mappingView,#app[data-view=lighting] #profilesView,#app[data-view=lighting] #settingsView,#app[data-view=profiles] #mappingView,#app[data-view=profiles] #lightingView,#app[data-view=profiles] #settingsView,#app[data-view=settings] #mappingView,#app[data-view=settings] #lightingView,#app[data-view=settings] #profilesView,#app[data-view=profiles] .layer-control,#app[data-view=settings] .layer-control{display:none}
 #app:not([data-view=mappings]) .header-actions{display:none}
@@ -57,11 +58,11 @@ main{max-width:1600px;margin:auto;padding:0 28px 30px}.workspace-header{min-heig
       <div class="workspace-body">
         <div class="layer-control"><div><span class="control-label">LAYER</span><div class="tabs" id="layerTabs" role="tablist" aria-label="Editing layer"></div></div><span class="layer-help">Editing layer only · switch active layer on the keypad</span></div>
         <div id="mappingView" class="mapping-workspace">
-          <section class="layout-card"><div class="panel-heading"><div><h2>Keypad layout</h2><p>Choose a key or knob action to configure.</p></div><div class="layout-meta"><span id="layoutName">12 keys · 2 knobs</span><button id="btnChangeLayout" class="change-model" type="button">Change</button><select id="orientPick" aria-label="Keypad orientation" title="Rotate the on-screen grid to match your keypad"></select></div></div>
+          <section class="layout-card"><div class="panel-heading"><div><h2>Keypad layout</h2><p>Select a control to edit it, or drag an action to copy it.</p></div><div class="layout-meta"><span id="layoutName">12 keys · 2 knobs</span><button id="btnChangeLayout" class="change-model" type="button">Change</button><select id="orientPick" aria-label="Keypad orientation" title="Rotate the on-screen grid to match your keypad"></select></div></div>
             <div class="device-stage"><div class="device"><div class="device-topline"><span>MACROPAD</span><span>KEYS &amp; ENCODERS</span></div><div class="knobs" id="knobs"></div><div class="grid" id="grid"></div></div><div class="device-caption"><span class="caption-dot"></span> Select any key or encoder action</div></div>
             <div class="layout-footer"><span id="draftState" class="draft-state">Local draft · device not compared</span><span>Changes are not sent until you write.</span></div>
           </section>
-          <section class="editor-card"><header class="editor-heading"><div><span class="control-label">SELECTED CONTROL</span><h2 id="editorTitle">Nothing selected</h2></div><button class="tiny ghost" id="btnClearBinding" disabled>Clear</button></header><div class="body stack" id="editor"><p class="hint">Choose a key or knob action to edit its mapping.</p></div><div class="editor-footer"><span class="footer-dot"></span> Editing local draft</div></section>
+          <section class="editor-card"><header class="editor-heading"><div><span class="control-label">SELECTED CONTROL</span><h2 id="editorTitle">Nothing selected</h2></div><div class="editor-actions"><button class="tiny ghost" id="btnCopyBinding" type="button" title="Copy the selected action" disabled>Copy</button><button class="tiny ghost" id="btnPasteBinding" type="button" title="Paste the copied action onto this control" disabled>Paste</button><button class="tiny ghost" id="btnClearBinding" disabled>Clear</button></div></header><div class="body stack" id="editor"><p class="hint">Choose a key or knob action to edit its mapping.</p></div><p id="copyStatus" class="copy-feedback" role="status"></p><div class="editor-footer"><span class="footer-dot"></span> Editing local draft</div></section>
         </div>
         <div id="lightingView" class="lighting-workspace">
           <section class="settings-section" id="basicLedPanel"><header class="section-heading"><div><h2>Backlight</h2><p>Lighting for the selected layer.</p></div></header><div class="body stack"><div class="notice"><strong>Local lighting settings.</strong> The current device lighting cannot be read back.</div><div class="field"><label for="ledMode">Mode</label><select id="ledMode"><option value="off">Off</option><option value="backlight">Backlight — steady</option><option value="shock">Shock</option><option value="shock2">Shock 2</option><option value="press">Light up on press</option></select></div><div class="field" id="ledColorField"><span class="legend">Colour</span><div class="swatches" id="ledColors"></div></div><button id="btnApplyLed" disabled>Apply lighting now</button><p class="hint" id="ledAvailability">Connect a compatible keypad to apply lighting.</p><details class="inline-details"><summary>Technical details</summary><p class="hint" id="ledCode"></p></details></div></section>
@@ -671,6 +672,9 @@ let verified = false;      // device has answered 0xFB with a usable layout
 let answered = false;      // ...and it really did answer, rather than there being nothing to ask
 let captureArmed = false;
 let advancedKeyboardOpen = false;
+let copiedBinding = null;     // in-memory copy; never sent to the device by copying
+let draggedBinding = null;
+let bindingTransferBusy = false;
 
 function loadProfile() {
   try {
@@ -2060,6 +2064,7 @@ async function applyXzkjRgb() {
   const connectDisabled = $("btnConnect").disabled;
   const connectAnyDisabled = $("btnConnectAny").disabled;
   rgbBusy = true;
+  updateCopyControls();
   $("rgbApplyStatus").textContent = "Reading current key bindings…";
   $("btnConnect").disabled = true;
   $("btnConnectAny").disabled = true;
@@ -2102,6 +2107,7 @@ async function applyXzkjRgb() {
     if (attempted) alert(message);
   } finally {
     rgbBusy = false;
+    updateCopyControls();
     $("btnConnect").disabled = connectDisabled;
     $("btnConnectAny").disabled = connectAnyDisabled;
     applyCaps(); renderLed();
@@ -2486,6 +2492,92 @@ function renderTabs() {
   }
 }
 
+// A copy is a decoded action, never the original device record. Raw records
+// contain their original slot/layer and cannot safely be moved verbatim.
+function copyableBinding(b) {
+  return !!b && (["media", "mouse"].includes(b.type) ||
+    (b.type === "key" && Array.isArray(b.steps) && b.steps.length > 0));
+}
+function snapshotBinding(slot, label) {
+  const binding = bindingFor(slot);
+  if (!copyableBinding(binding)) return null;
+  const copy = JSON.parse(JSON.stringify(binding));
+  delete copy._raw;
+  delete copy._mods;
+  return { binding: copy, slot, layer, label };
+}
+function updateCopyControls() {
+  const selectedBinding = sel ? bindingFor(sel.slot) : null;
+  $("btnCopyBinding").disabled = bindingTransferBusy || rgbBusy || !copyableBinding(selectedBinding);
+  $("btnCopyBinding").title = selectedBinding?.type === "raw"
+    ? "Unrecognised device records cannot be copied safely"
+    : "Copy the selected action";
+  $("btnPasteBinding").disabled = bindingTransferBusy || rgbBusy || !sel || !copiedBinding;
+}
+function applyCopiedBinding(snapshot, slot, label) {
+  if (!snapshot || bindingTransferBusy || rgbBusy) return false;
+  const previous = curLayer().bindings[slot];
+  if (previous && previous.type !== "clear" && bindingSignature(previous) === bindingSignature(snapshot.binding)) {
+    $("copyStatus").textContent = `${label} already has this action.`;
+    return false;
+  }
+  try {
+    const reports = bindingReports(slot, snapshot.binding);
+    if (!reports.length) throw new Error("this action is not supported in the current format");
+  } catch (err) {
+    $("copyStatus").textContent = `Cannot copy to ${label}: ${err.message}.`;
+    return false;
+  }
+  if (previous && previous.type !== "clear" &&
+      !confirm(`Replace the existing action on ${label}?\n\nThis changes the local draft only. Nothing is sent to the keypad.`)) return false;
+  // Clone again so editing either control never mutates the other or the clipboard.
+  curLayer().bindings[slot] = JSON.parse(JSON.stringify(snapshot.binding));
+  saveProfile();
+  sel = { slot, label };
+  captureArmed = false;
+  advancedKeyboardOpen = false;
+  renderAll();
+  const fromLayer = snapshot.layer === layer ? "" : ` (layer ${snapshot.layer + 1})`;
+  $("copyStatus").textContent = `Copied ${snapshot.label}${fromLayer} to ${label}. Write mappings to apply.`;
+  return true;
+}
+function attachBindingDrag(el, slot, label) {
+  el.draggable = copyableBinding(bindingFor(slot));
+  el.ondragstart = e => {
+    if (bindingTransferBusy || rgbBusy) { e.preventDefault(); return; }
+    draggedBinding = snapshotBinding(slot, label);
+    if (!draggedBinding) { e.preventDefault(); return; }
+    e.dataTransfer.effectAllowed = "copy";
+    // Do not put the shortcut or macro itself on the system drag clipboard.
+    e.dataTransfer.setData("text/plain", "macropad-action");
+    el.classList.add("drag-source");
+  };
+  el.ondragover = e => {
+    if (!draggedBinding || bindingTransferBusy || rgbBusy || draggedBinding.layer !== layer || draggedBinding.slot === slot) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    el.classList.add("drop-target");
+  };
+  el.ondragleave = e => {
+    if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+    el.classList.remove("drop-target");
+  };
+  el.ondrop = e => {
+    if (!draggedBinding || bindingTransferBusy || rgbBusy || draggedBinding.layer !== layer) return;
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove("drop-target");
+    const snapshot = draggedBinding;
+    draggedBinding = null;
+    applyCopiedBinding(snapshot, slot, label);
+  };
+  el.ondragend = () => {
+    draggedBinding = null;
+    el.classList.remove("drag-source");
+    document.querySelectorAll?.(".drop-target").forEach(node => node.classList.remove("drop-target"));
+  };
+}
+
 function renderGrid() {
   const g = $("grid");
   g.textContent = "";
@@ -2509,6 +2601,7 @@ function renderGrid() {
     cap.append(kn, kv);
     cap.title = `Key ${pos} (device slot ${slot}) — ` + (b ? bindingLabel(b) : "unbound");
     cap.onclick = () => select(slot, "Key " + pos);
+    attachBindingDrag(cap, slot, "Key " + pos);
     g.append(cap);
   });
   $("layoutName").textContent = layout.keys
@@ -2533,6 +2626,7 @@ function renderKnobs() {
     dial.setAttribute("aria-pressed", sel?.slot === pressSlot ? "true" : "false");
     dial.title = `Edit knob ${kpos + 1} press`;
     dial.onclick = () => select(pressSlot, `Knob ${kpos + 1} press`);
+    attachBindingDrag(dial, pressSlot, `Knob ${kpos + 1} press`);
 
     const lbl = document.createElement("span");
     lbl.className = "knob-label";
@@ -2558,6 +2652,7 @@ function renderKnobs() {
       row.title = `Knob ${kpos + 1} ${WHAT[name]} — ` + (b ? bindingLabel(b) : "unbound");
       row.setAttribute("aria-label", row.title);
       row.onclick = () => select(slot, `Knob ${kpos + 1} ${name}`);
+      attachBindingDrag(row, slot, `Knob ${kpos + 1} ${WHAT[name]}`);
       acts.append(row);
     });
 
@@ -2674,6 +2769,7 @@ function renderEditor() {
   host.textContent = "";
   $("editorTitle").textContent = sel ? sel.label : "Nothing selected";
   $("btnClearBinding").disabled = !sel || !bindingFor(sel.slot);
+  updateCopyControls();
 
   if (!sel) {
     const p = document.createElement("p");
@@ -3206,12 +3302,19 @@ $("btnChangeLayout").onclick = () => setWorkspaceView("settings");
 async function runUiAction(id, busyLabel, action) {
   const button = $(id), original = button.textContent;
   const connecting = id === "btnConnect" || id === "btnConnectAny";
+  const bindingIo = id === "btnRead" || id === "btnWrite";
+  if (bindingIo && bindingTransferBusy) return;
   const previouslyDisabled = button.disabled;
   clearActivityError();
   button.textContent = busyLabel;
   if (connecting) button.disabled = true;
+  if (bindingIo) { bindingTransferBusy = true; updateCopyControls(); }
   try { return await action(); }
-  finally { button.textContent = original; if (connecting) button.disabled = previouslyDisabled; }
+  finally {
+    button.textContent = original;
+    if (connecting) button.disabled = previouslyDisabled;
+    if (bindingIo) { bindingTransferBusy = false; updateCopyControls(); }
+  }
 }
 $("btnConnect").onclick = () => runUiAction("btnConnect", "Connecting…", () => connect(false));
 $("btnConnectAny").onclick = () => runUiAction("btnConnectAny", "Connecting…", () => connect(true));
@@ -3272,6 +3375,18 @@ $("layoutPick").onchange = e => {
 $("btnImport").onclick = () => $("fileImport").click();
 $("btnExportPrewrite").onclick = exportPrewriteBackup;
 $("btnClearLog").onclick = () => { logEl.textContent = "Cleared."; };
+$("btnCopyBinding").onclick = () => {
+  if (!sel || bindingTransferBusy || rgbBusy) return;
+  const snapshot = snapshotBinding(sel.slot, sel.label);
+  if (!snapshot) return;
+  copiedBinding = snapshot;
+  $("copyStatus").textContent = `Copied ${sel.label} from layer ${layer + 1}. Select another control and choose Paste.`;
+  updateCopyControls();
+};
+$("btnPasteBinding").onclick = () => {
+  if (!sel) return;
+  applyCopiedBinding(copiedBinding, sel.slot, sel.label);
+};
 $("btnClearBinding").onclick = () => {
   if (!sel) return;
   if ((effDialect() === "ch57x-3" && isConfirmedXzkj16x3()) ||

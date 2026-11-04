@@ -761,6 +761,50 @@ const dial = app.$("knobs").children[0].children.find(node => /\bknob-dial\b/.te
 dial.onclick();
 eq("clicking the encoder dial selects its press action", app.$("editorTitle").textContent, "Knob 1 press");
 
+console.log("\ncopy actions between knobs, keys and layers without device writes");
+const source = kp.layers[0].bindings[0x10];
+source.steps.push({ mods: 0, code: 0x04 });
+source._raw = Array(64).fill(0); source._raw[0] = 0xfa; source._raw[1] = 0x10; source._raw[2] = 1;
+app.renderAll();
+const sourceRow = descendantsForCopy(app.$("knobs")).find(node => /\bknob-act\b/.test(node.className || "") && node.title.startsWith("Knob 1 turn left"));
+function descendantsForCopy(root) { return [root, ...(root.children || []).flatMap(descendantsForCopy)]; }
+const key7Slot = [...app.posOfSlot(app.layoutOf()).entries()].find(([, pos]) => pos === 7)[0];
+const targetKey = app.$("grid").children[6];
+const sentBeforeCopy = device.sent.length;
+const drag = { dataTransfer: { setData(type, value) { this[type] = value; } }, preventDefault() {}, stopPropagation() {} };
+sourceRow.ondragstart(drag);
+targetKey.ondragover(drag);
+targetKey.ondrop(drag);
+const copied = kp.layers[0].bindings[key7Slot];
+eq("dragging copies the knob shortcut to key 7", copied?.steps?.[0]?.code, 0x1d);
+eq("copying a macro includes its later steps", copied?.steps?.[1]?.code, 0x04);
+eq("the copy removes the original slot's raw report", copied?._raw, undefined);
+eq("the source retains its original raw report", source._raw?.[1], 0x10);
+eq("the copied report addresses key 7", app.bindingReports(key7Slot, copied)[0][1], key7Slot);
+copied.steps[0].mods = 0x02;
+eq("editing the copy leaves the source unchanged", source.steps[0].mods, 0x01);
+confirmResult = false;
+app.$("knobs").children[0].children.find(node => /knob-acts/.test(node.className || "")).children[0].ondragstart(drag);
+app.$("grid").children[6].ondrop(drag);
+confirmResult = true;
+eq("cancelled replacement leaves the target intact", kp.layers[0].bindings[key7Slot].steps[0].mods, 0x02);
+app.select(0x10, "Knob 1 turn left");
+app.$("btnCopyBinding").onclick();
+app.$("layerTabs").children[1].onclick();
+app.select(key7Slot, "Key 7");
+app.$("btnPasteBinding").onclick();
+eq("copy and paste works across layers", kp.layers[1].bindings[key7Slot]?.steps?.[0]?.mods, 0x01);
+eq("copy and paste sends no device reports", device.sent.length, sentBeforeCopy);
+app.$("layerTabs").children[0].onclick();
+delete kp.layers[0].bindings[key7Slot]; delete kp.layers[1].bindings[key7Slot]; delete source._raw;
+kp.layers[0].bindings[key7Slot] = { type:"raw", raw:Array(64).fill(0) };
+app.renderAll();
+eq("unrecognised raw records cannot be dragged", app.$("grid").children[6].draggable, false);
+app.select(key7Slot, "Key 7");
+eq("unrecognised raw records cannot be copied", app.$("btnCopyBinding").disabled, true);
+delete kp.layers[0].bindings[key7Slot];
+app.renderAll();
+
 console.log("\nmouse numeric fields refresh their labels and packet preview");
 kp.layers[0].bindings[0x10] = { type:"mouse", action:"wheel", wheel:1, mod:0 };
 app.select(0x10, "Knob 1 turn left");
@@ -775,6 +819,12 @@ ok("wheel input stays mounted while typing", descendants(app.$("editor")).includ
 ok("knob label updates without reselection", descendants(app.$("knobs")).some(node => /knob-act/.test(node.className || "") && node.textContent.includes("Wheel -3")));
 const wheelPacket = Array.from(app.bindingReports(0x10, kp.layers[0].bindings[0x10])[0].subarray(0, 16), v => v.toString(16).padStart(2, "0")).join(" ");
 ok("packet preview updates without reselection", wheelPreview.innerHTML.includes(wheelPacket));
+app.$("btnCopyBinding").onclick();
+app.select(key7Slot, "Key 7");
+app.$("btnPasteBinding").onclick();
+eq("mouse wheel direction and delta are copied", kp.layers[0].bindings[key7Slot]?.wheel, -3);
+eq("copying the wheel action leaves its source unchanged", kp.layers[0].bindings[0x10]?.wheel, -3);
+delete kp.layers[0].bindings[key7Slot];
 
 console.log("\nXZKJ read, optional backup, import, write, and restore");
 const xzkjFirst = makeDevice({ vid: 0x514c, pid: 0x8850, keys: 16, knobs: 3,
@@ -787,6 +837,7 @@ xzkjFirst.config.set("0:21", [0xfa, 21, 1, 2, 1, 2, 0, 0, 0xcd, 0, 0, 0]);
 xzkjFirst.config.set("0:23", [0xfa, 23, 1, 2, 1, 2, 0, 0, 0xea, 0, 0, 0]);
 xzkjFirst.config.set("0:24", [0xfa, 24, 1, 2, 1, 2, 0, 0, 0xe2, 0, 0, 0]);
 xzkjFirst.config.set("0:25", [0xfa, 25, 1, 2, 1, 2, 0, 0, 0xe9, 0, 0, 0]);
+xzkjFirst.config.set("0:11", [0xfa, 11, 1, 2, 1, 2, 0, 0, 0xe9, 0, 0, 0]);
 const vendorShift = "fa 05 01 01 00 01 00 00 f2 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 32 00 00 00 00 00".split(" ").map(x => parseInt(x, 16));
 xzkjFirst.config.set("0:5", vendorShift);
 current = xzkjFirst; app.disconnected();
@@ -809,6 +860,31 @@ eq("captured left click reads as a mouse action", `${initial.layers[0].bindings[
 eq("decoded the vendor Shift-only record", JSON.stringify(initial.layers[0].bindings[5]?.steps), JSON.stringify([{mods:2,code:0}]));
 eq("retained the complete vendor Shift reply", JSON.stringify(initial.layers[0].bindings[5]?._raw), JSON.stringify(vendorShift));
 eq("write remains enabled without a backup export", app.$("btnWrite").disabled, false);
+const xzkjKey7 = [...app.posOfSlot(app.layoutOf()).entries()].find(([, pos]) => pos === 7)[0];
+const savedXzkjKey7 = initial.layers[0].bindings[xzkjKey7];
+const xzkjSentBeforeCopy = xzkjFirst.sent.length;
+app.select(23, "Knob 3 turn left");
+app.$("btnCopyBinding").onclick();
+app.select(xzkjKey7, "Key 7");
+app.$("btnPasteBinding").onclick();
+const xzkjCopied = initial.layers[0].bindings[xzkjKey7];
+const xzkjCopyReport = app.bindingReports(xzkjKey7, xzkjCopied)[0];
+eq("XZKJ copied media action retains its function", xzkjCopied.media, 0xea);
+eq("XZKJ copy addresses its destination slot", xzkjCopyReport[1], xzkjKey7);
+eq("XZKJ copy uses the destination layer", xzkjCopyReport[2], 1);
+eq("XZKJ copy removes the source raw bytes", xzkjCopied._raw, undefined);
+eq("XZKJ copy does not send a report", xzkjFirst.sent.length, xzkjSentBeforeCopy);
+const originalXzkjSource = JSON.stringify(xzkjFirst.config.get("0:23"));
+await app.writeAll();
+const copyWrites = xzkjFirst.sent.slice(xzkjSentBeforeCopy)
+  .filter(r => r.b[0] === 0xfd && r.b[1] !== 0xfe);
+eq("writing the copied action sends only the destination slot", JSON.stringify(copyWrites.map(r => r.b[1])), JSON.stringify([xzkjKey7]));
+eq("the copied action is stored on the destination in the mock", xzkjFirst.config.get(`0:${xzkjKey7}`)?.[8], 0xea);
+eq("writing the copy preserves the source record", JSON.stringify(xzkjFirst.config.get("0:23")), originalXzkjSource);
+initial.layers[0].bindings[xzkjKey7] = savedXzkjKey7;
+app.renderAll();
+await app.writeAll();
+eq("the mocked destination can be restored", xzkjFirst.config.get(`0:${xzkjKey7}`)?.[8], 0xe9);
 const originalProfile = JSON.parse(JSON.stringify(app.profile()));
 const legacyActionsProfile = JSON.parse(JSON.stringify(originalProfile));
 for (const slot of [18,21,23,24,25]) {
