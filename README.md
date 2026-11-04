@@ -28,8 +28,9 @@ color change were verified. Other write cases and devices remain experimental.
 the RGB panel shows a local draft, and applying it sends lighting settings for
 all three layers. Export a binding backup before making changes.
 
-Run this fork locally with `node tools/serve-local.mjs`, then open the displayed
-localhost URL in a Chromium-based browser. The [original hosted app](https://jvspier.github.io/macropad-rebind/)
+**[Open this fork's hosted app](https://josesantosdigital.github.io/macropad-rebind/)**
+in a Chromium-based browser. You can also run it locally with
+`node tools/serve-local.mjs`. The [original hosted app](https://jvspier.github.io/macropad-rebind/)
 is maintained by upstream and does not include this fork's changes.
 
 <p align="center">
@@ -215,14 +216,10 @@ tests catch it immediately.
 It must be served over `http://localhost` or `https://` — browsers only
 allow USB access from a secure origin.
 
-For `514c:8850` with 16 keys and 3 knobs, use this modified local working tree:
-the hosted link above points to the public upstream page and does not yet
-contain these device-specific changes. Run the local server command below from
-this repository, then open its localhost URL in a Chromium browser.
-
-For other supported models, **the quickest route is [the hosted copy](https://jvspier.github.io/macropad-rebind/)** —
-it is served over HTTPS, which is all the browser needs. Nothing is uploaded
-anywhere; the page talks straight to the USB device.
+Open **[this fork's hosted app](https://josesantosdigital.github.io/macropad-rebind/)**
+for the XZKJ 16-key/3-knob support. It is served over HTTPS, which the browser
+needs for WebHID. The page talks directly to the USB device; configuration
+backups stay on your computer unless you choose to share them.
 
 To run it yourself instead, download or clone this repo, then in that folder run:
 
