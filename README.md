@@ -344,6 +344,12 @@ right.
 
 **Layers** — three complete sets of bindings.
 
+**Windows app shortcuts** — this pad can also send the keyboard shortcuts
+assigned to VoiceAttack commands that focus or open desktop apps. Those
+VoiceAttack bindings are separate from the keypad's saved configuration. See
+[the companion shortcut map](docs/VOICEATTACK_APP_SHORTCUTS.md) for the current
+app-to-command list and which overlay labels still need updating.
+
 **Backlight** — off, steady, shock, shock2, or light-up-on-press, in red,
 orange, yellow, green, cyan, blue, purple or white, set per layer. Any colour
 works with any mode.
