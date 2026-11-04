@@ -214,6 +214,8 @@ Open **[this fork's hosted app](https://josesantosdigital.github.io/macropad-reb
 for the XZKJ 16-key/3-knob support. It is served over HTTPS, which the browser
 needs for WebHID. The page talks directly to the USB device; configuration
 backups stay on your computer unless you choose to share them.
+Use the **Dark mode** control in the header to switch appearances; your choice
+is remembered in that browser.
 
 To run it yourself instead, download or clone this repo, then in that folder run:
 

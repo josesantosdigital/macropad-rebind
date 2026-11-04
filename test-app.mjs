@@ -69,6 +69,7 @@ const initiallyDisabled = new Set(
 
 const registry = new Map();
 const document = {
+  documentElement: { dataset: {} },
   getElementById(id) {
     if (!registry.has(id)) {
       const e = mkEl();
@@ -250,6 +251,13 @@ eq("layout adopted from the device", `${app.layoutOf().keys}/${app.layoutOf().kn
 
 console.log("\nworkspace navigation is local and keyboard accessible");
 const reportsBeforeNavigation = device.sent.length;
+app.$("btnTheme").onclick();
+eq("dark mode is applied", document.documentElement.dataset.theme, "dark");
+eq("dark mode is announced", app.$("btnTheme").getAttribute("aria-pressed"), "true");
+eq("dark mode preference is saved separately", ls.getItem("macropad-rebind.theme.v1"), "dark");
+app.$("btnTheme").onclick();
+eq("light mode can be restored", document.documentElement.dataset.theme, "light");
+eq("light mode preference is saved", ls.getItem("macropad-rebind.theme.v1"), "light");
 app.$("viewLighting").onclick();
 eq("lighting view is selected", app.$("app").dataset.view, "lighting");
 eq("lighting tab announces selection", app.$("viewLighting").getAttribute("aria-selected"), "true");
@@ -258,7 +266,7 @@ let defaultPrevented = false;
 app.$("viewLighting").onkeydown({ key: "ArrowLeft", preventDefault() { defaultPrevented = true; } });
 eq("arrow key returns to mappings", app.$("app").dataset.view, "mappings");
 eq("arrow key prevents page scrolling", defaultPrevented, true);
-eq("switching views sends no device reports", device.sent.length, reportsBeforeNavigation);
+eq("switching themes and views sends no device reports", device.sent.length, reportsBeforeNavigation);
 app.log("A problem occurred", "e");
 app.log("Additional context", "w");
 eq("an error remains visible after later warnings", app.$("activityError").textContent, "A problem occurred");

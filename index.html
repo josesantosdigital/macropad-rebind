@@ -102,6 +102,53 @@ dialog{border:1px solid var(--line);border-radius:7px;background:var(--panel);co
 @media(max-width:700px){.top-inner{min-height:64px;padding:0 16px}.brand{font-size:14px}.connection{gap:9px}.connection button{font-size:12px;padding:8px}.status{font-size:11px}main{padding:30px 16px 20px}.page-heading{margin-bottom:24px}.heading-note{display:none}.action-bar{align-items:stretch;flex-direction:column;gap:12px;margin-bottom:28px}.action-buttons{display:grid;grid-template-columns:1fr 1fr}.action-buttons .backup-menu{grid-column:1/-1;grid-row:2}.backup-menu summary{text-align:center}.backup-options{left:0;right:auto;width:100%}.workspace-nav{align-items:start;flex-direction:column;gap:14px}.view-tabs{width:100%}.layer-control{padding-bottom:10px;width:100%;justify-content:space-between}.layer-help{margin-bottom:16px}.mapping-workspace{grid-template-columns:minmax(0,1fr)}.editor-card{min-height:0}.editor-card .body{min-height:80px}.tools-content{grid-template-columns:1fr;gap:28px}.rgb-controls{grid-template-columns:1fr}.rgb-actions .primary{margin-left:0;width:100%}.site-footer{flex-wrap:wrap}.tool-action{align-items:start;flex-direction:column}.device{padding:22px 12px}.knobs{gap:9px}.knob{width:calc((100% - 18px)/3);min-width:0}}
 @media(max-width:390px){.brand-name-light{display:none}.status{font-size:10px}.layout-controls{flex-direction:column}.tabs button{padding-left:.4rem;padding-right:.4rem}.keycap .kv{font-size:11px}.keycap .kn{font-size:9px}.grid{gap:5px}.rgb-heading{flex-direction:column;gap:2px}}
 
+/* Appearance is independent of device state and stored separately from profiles. */
+.theme-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}
+.theme-toggle svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:500px){.top-inner{gap:10px}.connection{gap:6px}.theme-toggle{width:38px;padding:8px!important}.theme-toggle .theme-text{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}}
+@media(max-width:450px){.status{font-size:0}}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#171c19; --panel:#222a25; --panel-2:#2b342e; --raise:#39473d;
+  --line:#435047; --line-soft:#364139; --ink:#edf2eb; --ink-2:#c0cbc0; --dim:#a6b4a6;
+  --led:#f49a81; --led-dim:#a95542; --led-soft:#4b2e28;
+  --ok:#a6ddbb; --ok-soft:#263e30; --warn:#edc67d; --warn-soft:#423925;
+}
+html[data-theme="dark"] .top{background:#202822}
+html[data-theme="dark"] .brand-name-light,html[data-theme="dark"] .status{color:#b5c0b5}
+html[data-theme="dark"] .status.on{color:var(--ok)}html[data-theme="dark"] .status.err{color:var(--led)}
+html[data-theme="dark"] button:not(.keycap):not(.knob-act):not(.swatch){background:#303b33;border-color:#526156;color:var(--ink)}
+html[data-theme="dark"] button:not(.keycap):not(.knob-act):not(.swatch):hover:not(:disabled){background:#415144;border-color:#718675}
+html[data-theme="dark"] button.primary{background:#a4cfaf!important;border-color:#a4cfaf!important;color:#182b1e!important}
+html[data-theme="dark"] button.primary:hover:not(:disabled){background:#b9ddc1!important;border-color:#b9ddc1!important}
+html[data-theme="dark"] button.ghost{background:transparent!important}
+html[data-theme="dark"] button.danger{background:#482f2a!important;border-color:#a75e4d!important;color:#ffc1af!important}
+html[data-theme="dark"] a,html[data-theme="dark"] .activity button{color:#add8b6}
+html[data-theme="dark"] .eyebrow,html[data-theme="dark"] .layer-label{color:#a1b5a3}
+html[data-theme="dark"] .action-bar{background:#29382d;border-color:#405546}
+html[data-theme="dark"] .action-copy span,html[data-theme="dark"] .layer-help,html[data-theme="dark"] .site-footer,html[data-theme="dark"] .site-footer a{color:#b4c0b3}
+html[data-theme="dark"] .activity{background:var(--panel);border-color:#8aa68e}
+html[data-theme="dark"] .activity-error{color:#ffc0af}
+html[data-theme="dark"] .backup-menu summary,html[data-theme="dark"] .backup-options{background:#303b33;border-color:#526156}
+html[data-theme="dark"] .workspace-nav,html[data-theme="dark"] .tools-drawer{border-color:var(--line)}
+html[data-theme="dark"] .view-tabs button{background:transparent!important;border:0!important;color:#b4c0b3!important}
+html[data-theme="dark"] .view-tabs button[aria-selected="true"]{color:#f0f5ee!important}
+html[data-theme="dark"] .view-tabs button[aria-selected="true"]::after{background:#a4cfaf}
+html[data-theme="dark"] .tabs,html[data-theme="dark"] .seg{background:#303c33}
+html[data-theme="dark"] .tabs button,html[data-theme="dark"] .seg button{background:transparent!important;border:0!important;color:#b9c5b8!important}
+html[data-theme="dark"] .tabs button[aria-selected="true"],html[data-theme="dark"] .seg button[aria-pressed="true"]{background:#526858!important;color:#fff!important}
+html[data-theme="dark"] .layout-controls label span,html[data-theme="dark"] .field>label,html[data-theme="dark"] .field>span.legend,html[data-theme="dark"] .legend{color:#c0cdc0}
+html[data-theme="dark"] select,html[data-theme="dark"] input[type="text"],html[data-theme="dark"] input[type="number"],html[data-theme="dark"] textarea,html[data-theme="dark"] input[type="color"]{background:#303b33;border-color:#526156;color:var(--ink)}
+html[data-theme="dark"] .mods button[aria-pressed="true"]{background:#a4cfaf!important;border-color:#a4cfaf!important;color:#182b1e!important}
+html[data-theme="dark"] button.capture{background:#2b3a30!important;border-color:#729079!important;color:#d7ebd9!important}
+html[data-theme="dark"] button.capture.armed{background:var(--led-soft)!important;border-color:var(--led)!important;color:#ffd5c9!important}
+html[data-theme="dark"] code{background:#344037}
+html[data-theme="dark"] .notice{background:#403b2c;border-color:#d1af69;color:#f0dfb7}
+html[data-theme="dark"] .notice strong{color:#fff0cc}
+html[data-theme="dark"] .tag{background:#49412d;color:#f3d59a}
+html[data-theme="dark"] .unsupported{background:#492e29;border-color:#9e5b4d;color:#ffd1c2}
+html[data-theme="dark"] .swatch[aria-pressed="true"]{outline-color:#e2f2e3}
+
 </style>
 </head>
 <body>
@@ -112,6 +159,7 @@ dialog{border:1px solid var(--line);border-radius:7px;background:var(--panel);co
       <span><strong>Macropad</strong><span class="brand-name-light"> Rebind</span></span>
     </a>
     <div class="connection">
+      <button id="btnTheme" class="theme-toggle" type="button" aria-pressed="false" title="Dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 15.4A8.5 8.5 0 0 1 8.6 3.5a8.5 8.5 0 1 0 11.9 11.9Z"/></svg><span class="theme-text">Dark mode</span></button>
       <span class="status" id="status" role="status">disconnected</span>
       <button id="btnConnect" class="primary">Connect keypad</button>
     </div>
@@ -3203,6 +3251,19 @@ function renderAll() {
 }
 
 // Views only change what is visible; they never communicate with the keypad.
+const THEME_KEY = "macropad-rebind.theme.v1";
+function applyTheme(theme) {
+  const dark = theme === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  $("btnTheme").setAttribute("aria-pressed", String(dark));
+}
+try { applyTheme(localStorage.getItem(THEME_KEY)); } catch { applyTheme("light"); }
+$("btnTheme").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* storage may be unavailable */ }
+};
+
 function setWorkspaceView(view) {
   const lighting = view === "lighting";
   $("app").dataset.view = lighting ? "lighting" : "mappings";
