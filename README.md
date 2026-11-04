@@ -93,7 +93,7 @@ a report is enough to get it added.
 > header byte differs from its original raw value and remains unexplained. Once
 > identified, the device can be written without a manual backup export. The app
 > reads its current bindings automatically before each write and offers an
-> optional **Export pre-write backup** button.
+> optional **Export snapshot** action under **Profiles**.
 > The gory details are in [docs/PROTOCOL.md](docs/PROTOCOL.md#not-one-protocol--three-dialects).
 
 To use a previously exported profile, connect and import it, then review the
@@ -109,7 +109,8 @@ other slots and layers use the same inferred format and are checked by readback.
 
 On the XZKJ 16-key/3-knob unit, a vendor-configured standalone Shift now reads
 as a Shift-only key step. To set one in the editor, choose the key, select the
-keyboard action, enable **Shift**, choose **modifiers only**, and add the step.
+keyboard action, open **Manual entry & sequence options**, enable **Shift**,
+choose **modifiers only**, and add the step.
 The one-entry format matches a working vendor-configured readback; writes of
 this form by this app have not yet been verified on hardware. The full raw
 device reply is retained in a current-device backup.
@@ -271,7 +272,7 @@ nothing tells you why.
    deliberately invisible to the browser.
 
    If the on-screen grid does not match your hardware, use the **orientation**
-   dropdown beside the model picker — normal, upside down, or rotated either way.
+   dropdown in the **Mappings** workspace — normal, upside down, or rotated either way.
    Only one model's grid has been confirmed against a real unit, so this is the
    quickest fix if yours looks wrong.
 
@@ -279,18 +280,18 @@ nothing tells you why.
    enables the controls that write once it gets a sensible answer. The picker
    filter is a convenience, not a guarantee — other hardware exposes a vendor HID
    interface too, and writing to one of those could misconfigure it.
-2. If supported, click **Read from keypad** to pull in what is currently
-   programmed, then use **Backups → Export current profile** to save a copy.
+2. If supported, click **Read mappings** to pull in what is currently
+   programmed, then use **Profiles → Export profile** to save a copy.
 3. In **Mappings**, choose a layer, then click a key or knob action to edit it.
    The tabs change the layer being edited; switch the active layer on the pad.
-4. Click **Write to keypad**. On devices with readback, it reads first and shows a diff — what
+4. Click **Write mappings**. On devices with readback, it reads first and shows a diff — what
    is on each key now and what it will become — then reads back afterwards and
    confirms every binding actually stored. A write returning no error is not the
    same as the device having kept it.
 
 > **Writing only sends what the editor holds.** It never clears a key the editor
 > has no binding for, so bindings already on the keypad that you have not loaded
-> are left exactly as they are. Use **Read from keypad** first if you want to see
+> are left exactly as they are. Use **Read mappings** first if you want to see
 > and edit them, or **Blank this layer** if you want them gone.
 
 > **Programming needs the USB cable.** If your keypad also does Bluetooth, that
@@ -360,7 +361,7 @@ and not edited is written back exactly as it came, so parts of the format this
 tool doesn't fully decode survive a round trip.
 
 **Export your config.** Bindings persist in the browser's `localStorage`, which
-is a convenience, not a backup. **Backups → Export current profile** writes a
+is a convenience, not a backup. **Profiles → Export profile** writes a
 JSON file you can keep or re-import. Browser storage is separate for each site,
 so a profile saved on localhost does not automatically appear on GitHub Pages.
 
@@ -369,7 +370,7 @@ so a profile saved on localhost does not automatically appear on GitHub Pages.
 > itself — anything that can open the device can read your macros back.
 
 **If only some keys work or light up**, the keypad has been told it is a
-different model. **Device tools** contains the **Repair identity** action.
+different model. **Device settings** contains the **Repair identity** action.
 Your bindings are unaffected.
 [docs/PROTOCOL.md](docs/PROTOCOL.md) explains the cause.
 

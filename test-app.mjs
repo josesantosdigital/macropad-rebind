@@ -84,6 +84,7 @@ const document = {
 };
 function Option(text, value) { const e = mkEl(); e.textContent = text; e.value = value ?? text; return e; }
 const store = new Map();
+store.set("macropad-rebind.layout.v1", JSON.stringify({ keys:16, knobs:3, cols:4, rows:4, orientation:"upside-down" }));
 const ls = { getItem: k => (store.has(k) ? store.get(k) : null),
              setItem: (k, v) => store.set(k, String(v)),
              removeItem: k => store.delete(k) };
@@ -215,13 +216,18 @@ const app = new Function(
            "alignKnobBase, slotName, knobBase, knobSlotIn, knobAt, readCommand, " +
            "select, renderAll, renderLayoutPick, " +
            "posOfSlot, disconnected, LAYOUTS, effDialect, loadLayout, " +
-           "setForced: d => { forcedDialect = d; }, setLayout, " +
+           "setForced: d => { forcedDialect = d; }, setLayout, setOrientation, " +
            "profile: () => profile, setProfile: p => { profile = p; }, prewriteBackup: () => prewriteBackup, " +
            "layoutOf: () => layout, dialectOf: () => dialect, log, $ };"
 )(document, navigator, windowStub, ls, Option, () => confirmResult, () => {}, class {}, { createObjectURL: () => "", revokeObjectURL() {} });
 
 console.log("\nscript loads and renders without throwing");
 eq("  the log element got content", typeof app.$("log").textContent, "string");
+eq("saved model loads at startup", `${app.layoutOf().keys}/${app.layoutOf().knobs}`, "16/3");
+eq("saved orientation loads at startup", app.layoutOf().orientation, "upside-down");
+app.setLayout(app.LAYOUTS.find(l => l.keys === 12 && l.knobs === 2));
+app.setOrientation("normal");
+app.renderAll();
 
 /* Read everything the app has logged. This is the assertion that matters:
    connect() catches its own errors and logs them, so a crash inside it leaves
@@ -248,6 +254,11 @@ eq("connect enabled Blank",  app.$("btnBlank").disabled, false);
 eq("connect enabled Repair", app.$("btnRepair").disabled, false);
 eq("dialect detected",       app.dialectOf(), "ch57x-1");
 eq("layout adopted from the device", `${app.layoutOf().keys}/${app.layoutOf().knobs}`, "12/2");
+const beforeRepairCancel = device.sent.length;
+confirmResult = false;
+await app.$("btnRepair").onclick();
+confirmResult = true;
+eq("cancelling identity repair sends no reports", device.sent.length, beforeRepairCancel);
 
 console.log("\nworkspace navigation is local and keyboard accessible");
 const reportsBeforeNavigation = device.sent.length;
@@ -260,12 +271,18 @@ eq("light mode can be restored", document.documentElement.dataset.theme, "light"
 eq("light mode preference is saved", ls.getItem("macropad-rebind.theme.v1"), "light");
 app.$("viewLighting").onclick();
 eq("lighting view is selected", app.$("app").dataset.view, "lighting");
-eq("lighting tab announces selection", app.$("viewLighting").getAttribute("aria-selected"), "true");
-eq("mappings tab is removed from tab order", app.$("viewMappings").tabIndex, -1);
-let defaultPrevented = false;
-app.$("viewLighting").onkeydown({ key: "ArrowLeft", preventDefault() { defaultPrevented = true; } });
-eq("arrow key returns to mappings", app.$("app").dataset.view, "mappings");
-eq("arrow key prevents page scrolling", defaultPrevented, true);
+eq("lighting navigation announces the current page", app.$("viewLighting").getAttribute("aria-current"), "page");
+app.$("viewProfiles").onclick();
+eq("profiles view is available", app.$("app").dataset.view, "profiles");
+app.$("viewSettings").onclick();
+eq("device settings view is available", app.$("app").dataset.view, "settings");
+app.$("viewMappings").onclick();
+eq("mappings view is available", app.$("app").dataset.view, "mappings");
+let layerKeyPrevented = false;
+app.$("layerTabs").children[0].onkeydown({ key:"ArrowRight", preventDefault() { layerKeyPrevented = true; } });
+eq("arrow key selects the next editing layer", app.$("layerTabs").children[1].getAttribute("aria-selected"), "true");
+eq("layer navigation prevents page scrolling", layerKeyPrevented, true);
+app.$("layerTabs").children[0].onclick();
 eq("switching themes and views sends no device reports", device.sent.length, reportsBeforeNavigation);
 app.log("A problem occurred", "e");
 app.log("Additional context", "w");
@@ -278,6 +295,14 @@ await app.readAll();
 const p = app.profile();
 eq("layer 1 bindings loaded", Object.keys(p.layers[0].bindings).length, 18);
 eq("  slot 1 decoded as media", p.layers[0].bindings[1].type, "media");
+eq("a successful read establishes a comparison", app.$("draftState").textContent, "Mappings match last device read");
+const initiallyReadBinding = p.layers[0].bindings[1];
+p.layers[0].bindings[1] = { type:"media", media:0xe2 };
+app.renderAll();
+ok("an edit is distinguished from the last device read", /1 difference from last read/.test(app.$("draftState").textContent));
+p.layers[0].bindings[1] = initiallyReadBinding;
+app.renderAll();
+eq("reverting an edit restores the comparison", app.$("draftState").textContent, "Mappings match last device read");
 
 // The diff dialog blocks until the user confirms, so stand in for that click.
 // (That it blocks at all is worth knowing — an earlier version of this test
@@ -308,6 +333,8 @@ ok("no 0xEF was ever sent", !device.sent.some(s => s.b[0] === 0xef));
 ok("every report is 64 bytes", device.sent.every(s => s.b.length === 64));
 ok("report id is always 3", device.sent.every(s => s.id === 3));
 eq("the diff dialog was shown before writing", dialogsShown, 1);
+ok("write review warns when backlight settings will also be sent",
+   app.$("diffBody").children.some(node => /backlight settings for all three layers/i.test(node.textContent)));
 // The app reads the device back after writing. With a mock that stores what it
 // is told, that check has to come out clean — and this is the assertion that
 // gives the ones above their teeth.
@@ -730,6 +757,9 @@ ok("a bound action is styled as bound", /\bbound\b/.test(rows[0].className));
 ok("the full text is still the tooltip", rows[0].title.includes("Ctrl+Z") && /turn left/.test(rows[0].title));
 rows[4].onclick();                               // knob 2 press
 eq("clicking a row selects that action", app.$("editorTitle").textContent, "Knob 2 press");
+const dial = app.$("knobs").children[0].children.find(node => /\bknob-dial\b/.test(node.className || ""));
+dial.onclick();
+eq("clicking the encoder dial selects its press action", app.$("editorTitle").textContent, "Knob 1 press");
 
 console.log("\nmouse numeric fields refresh their labels and packet preview");
 kp.layers[0].bindings[0x10] = { type:"mouse", action:"wheel", wheel:1, mod:0 };
