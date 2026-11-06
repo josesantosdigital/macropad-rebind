@@ -4,6 +4,8 @@ This guide records the Windows app-focus commands used alongside this
 macropad. Macropad Rebind programs keys to send keyboard actions; VoiceAttack
 listens for those shortcuts and invokes the matching command. VoiceAttack's
 profile and key triggers are separate from the configuration saved on the pad.
+The Brave plugin source, importable command, and build notes are in
+[integrations/voiceattack/BraveFocus](../integrations/voiceattack/BraveFocus/README.md).
 
 ## Application commands
 
